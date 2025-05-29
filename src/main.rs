@@ -1,10 +1,13 @@
 extern crate vi;
 
-use anyhow::Result;
 use freya::prelude::*;
 
+const APP_TITLE: &str = concat!("VKey ", env!("CARGO_PKG_VERSION"), " - VKey Bộ Gõ Tiếng Việt");
+const APP_WIDTH: f64 = 400.0;
+const APP_HEIGHT: f64 = 300.0;
+
 fn main() {
-    launch_with_props(app, "VKey - Vietnamese Input Method", (400.0, 300.0));
+    launch_with_props(app, APP_TITLE, (APP_WIDTH, APP_HEIGHT));
 }
 
 fn app() -> Element {
