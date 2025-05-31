@@ -1,13 +1,17 @@
 extern crate vi;
 
-use freya::prelude::*;
+mod core;
+mod error;
+mod ui;
 
-const APP_TITLE: &str = concat!("VKey ", env!("CARGO_PKG_VERSION"), " - VKey Bộ Gõ Tiếng Việt");
-const APP_WIDTH: f64 = 400.0;
-const APP_HEIGHT: f64 = 300.0;
+use freya::prelude::*;
+use ui::App;
+use ui::constants::{APP_TITLE, APP_WIDTH, APP_HEIGHT};
+
+const TEXT_FONT_SIZE: &str = "14";
 
 fn main() {
-    launch_with_props(app, APP_TITLE, (APP_WIDTH, APP_HEIGHT));
+    launch_with_props(App, APP_TITLE, (APP_WIDTH, APP_HEIGHT));
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -77,6 +81,19 @@ fn app() -> Element {
             height: "100%",
             background: "rgb(45, 55, 72)",
             padding: "20",
+
+            rect {
+                direction: "horizontal",
+                cross_align: "center",
+
+                // Title
+                label {
+                    font_size: TEXT_FONT_SIZE,
+                    font_weight: "600",
+                    color: "rgb(226, 232, 240)",
+                    "Điều khiển"
+                }
+            }
             
             rect {
                 background: "rgb(74, 85, 104)",
@@ -84,30 +101,19 @@ fn app() -> Element {
                 padding: "20",
                 width: "600",
                 shadow: "0 4 6 0 rgb(0, 0, 0, 0.1)",
-                
-                // Title
-                label {
-                    font_size: "18",
-                    font_weight: "600",
-                    color: "rgb(226, 232, 240)",
-                    "Điều khiển"
-                }
-                
                 // Input Type Row
                 rect {
                     direction: "horizontal",
                     cross_align: "center",
-                    padding: "16 0 0 0",
-                    
                     rect {
                         width: "120",
                         label {
                             font_weight: "500",
                             color: "rgb(226, 232, 240)",
+                            font_size: "14",
                             "Kiểu gõ:"
                         }
                     }
-                    
                     Dropdown {
                         value: input_type.read().to_string(),
                         
@@ -127,23 +133,17 @@ fn app() -> Element {
                             label { "VIQR" }
                         }
                     }
-                }
-                
-                // Encoding Row
-                rect {
-                    direction: "horizontal",
-                    cross_align: "center",
-                    padding: "16 0 0 0",
-                    
+
                     rect {
                         width: "120",
+                        margin: "0 0 0 16",
                         label {
                             font_weight: "500",
                             color: "rgb(226, 232, 240)",
                             "Bảng mã:"
                         }
                     }
-                    
+
                     Dropdown {
                         value: encoding.read().to_string(),
                         
@@ -166,201 +166,201 @@ fn app() -> Element {
                 }
                 
                 // Switch Keys Row
-                rect {
-                    direction: "horizontal",
-                    cross_align: "center",
-                    padding: "16 0 0 0",
+                // rect {
+                //     direction: "horizontal",
+                //     cross_align: "center",
+                //     padding: "16 0 0 0",
                     
-                    rect {
-                        width: "120",
-                        label {
-                            font_weight: "500",
-                            color: "rgb(226, 232, 240)",
-                            "Phím chuyển:"
-                        }
-                    }
+                //     rect {
+                //         width: "120",
+                //         label {
+                //             font_weight: "500",
+                //             color: "rgb(226, 232, 240)",
+                //             "Phím chuyển:"
+                //         }
+                //     }
                     
-                    rect {
-                        direction: "horizontal",
-                        spacing: "16",
-                        cross_align: "center",
+                //     rect {
+                //         direction: "horizontal",
+                //         spacing: "16",
+                //         cross_align: "center",
                         
-                        // Shift key checkbox
-                        rect {
-                            direction: "horizontal",
-                            cross_align: "center",
-                            spacing: "6",
+                //         // Shift key checkbox
+                //         rect {
+                //             direction: "horizontal",
+                //             cross_align: "center",
+                //             spacing: "6",
                             
-                            Switch {
-                                enabled: shift_enabled.read().clone(),
-                                ontoggled: move |_| {
-                                    shift_enabled.toggle();
-                                }
-                            }
-                            label {
-                                color: "rgb(226, 232, 240)",
-                                "⇧"
-                            }
-                        }
+                //             Switch {
+                //                 enabled: shift_enabled.read().clone(),
+                //                 ontoggled: move |_| {
+                //                     shift_enabled.toggle();
+                //                 }
+                //             }
+                //             label {
+                //                 color: "rgb(226, 232, 240)",
+                //                 "⇧"
+                //             }
+                //         }
                         
-                        // Ctrl key checkbox  
-                        rect {
-                            direction: "horizontal",
-                            cross_align: "center", 
-                            spacing: "6",
+                //         // Ctrl key checkbox  
+                //         rect {
+                //             direction: "horizontal",
+                //             cross_align: "center", 
+                //             spacing: "6",
                             
-                            Switch {
-                                enabled: ctrl_enabled.read().clone(),
-                                ontoggled: move |_| {
-                                    ctrl_enabled.toggle();
-                                }
-                            }
-                            label {
-                                color: "rgb(226, 232, 240)",
-                                "⌃"
-                            }
-                        }
+                //             Switch {
+                //                 enabled: ctrl_enabled.read().clone(),
+                //                 ontoggled: move |_| {
+                //                     ctrl_enabled.toggle();
+                //                 }
+                //             }
+                //             label {
+                //                 color: "rgb(226, 232, 240)",
+                //                 "⌃"
+                //             }
+                //         }
                         
-                        // Cmd key checkbox
-                        rect {
-                            direction: "horizontal",
-                            cross_align: "center",
-                            spacing: "6",
+                //         // Cmd key checkbox
+                //         rect {
+                //             direction: "horizontal",
+                //             cross_align: "center",
+                //             spacing: "6",
                             
-                            Switch {
-                                enabled: cmd_enabled.read().clone(),
-                                ontoggled: move |_| {
-                                    cmd_enabled.toggle();
-                                }
-                            }
-                            label {
-                                color: "rgb(226, 232, 240)",
-                                "⌘"
-                            }
-                        }
+                //             Switch {
+                //                 enabled: cmd_enabled.read().clone(),
+                //                 ontoggled: move |_| {
+                //                     cmd_enabled.toggle();
+                //                 }
+                //             }
+                //             label {
+                //                 color: "rgb(226, 232, 240)",
+                //                 "⌘"
+                //             }
+                //         }
                         
-                        // Home key checkbox
-                        rect {
-                            direction: "horizontal", 
-                            cross_align: "center",
-                            spacing: "6",
+                //         // Home key checkbox
+                //         rect {
+                //             direction: "horizontal", 
+                //             cross_align: "center",
+                //             spacing: "6",
                             
-                            Switch {
-                                enabled: home_enabled.read().clone(),
-                                ontoggled: move |_| {
-                                    home_enabled.toggle();
-                                }
-                            }
-                            label {
-                                color: "rgb(226, 232, 240)",
-                                "🏠"
-                            }
-                        }
+                //             Switch {
+                //                 enabled: home_enabled.read().clone(),
+                //                 ontoggled: move |_| {
+                //                     home_enabled.toggle();
+                //                 }
+                //             }
+                //             label {
+                //                 color: "rgb(226, 232, 240)",
+                //                 "🏠"
+                //             }
+                //         }
                         
-                        // Key display
-                        rect {
-                            background: "rgb(45, 55, 72)",
-                            border: "2 solid rgb(49, 130, 206)",
-                            corner_radius: "4",
-                            padding: "8 16",
-                            min_width: "60",
-                            main_align: "center",
+                //         // Key display
+                //         rect {
+                //             background: "rgb(45, 55, 72)",
+                //             border: "2 solid rgb(49, 130, 206)",
+                //             corner_radius: "4",
+                //             padding: "8 16",
+                //             min_width: "60",
+                //             main_align: "center",
                             
-                            label {
-                                color: "rgb(226, 232, 240)",
-                                font_family: "monospace",
-                                "|"
-                            }
-                        }
+                //             label {
+                //                 color: "rgb(226, 232, 240)",
+                //                 font_family: "monospace",
+                //                 "|"
+                //             }
+                //         }
                         
-                        // Beep checkbox
-                        rect {
-                            direction: "horizontal",
-                            cross_align: "center",
-                            spacing: "6",
+                //         // Beep checkbox
+                //         rect {
+                //             direction: "horizontal",
+                //             cross_align: "center",
+                //             spacing: "6",
                             
-                            Switch {
-                                enabled: beep_enabled.read().clone(),
-                                ontoggled: move |_| {
-                                    beep_enabled.toggle();
-                                }
-                            }
-                            label {
-                                color: "rgb(226, 232, 240)",
-                                "Kêu beep"
-                            }
-                        }
-                    }
-                }
+                //             Switch {
+                //                 enabled: beep_enabled.read().clone(),
+                //                 ontoggled: move |_| {
+                //                     beep_enabled.toggle();
+                //                 }
+                //             }
+                //             label {
+                //                 color: "rgb(226, 232, 240)",
+                //                 "Kêu beep"
+                //             }
+                //         }
+                //     }
+                // }
                 
                 // Input Mode Row
-                rect {
-                    direction: "horizontal", 
-                    cross_align: "center",
-                    padding: "16 0 0 0",
+                // rect {
+                //     direction: "horizontal", 
+                //     cross_align: "center",
+                //     padding: "16 0 0 0",
                     
-                    rect {
-                        width: "120",
-                        label {
-                            font_weight: "500",
-                            color: "rgb(226, 232, 240)",
-                            "Chế độ gõ:"
-                        }
-                    }
+                //     rect {
+                //         width: "120",
+                //         label {
+                //             font_weight: "500",
+                //             color: "rgb(226, 232, 240)",
+                //             "Chế độ gõ:"
+                //         }
+                //     }
                     
-                    rect {
-                        direction: "horizontal",
-                        spacing: "20",
+                //     rect {
+                //         direction: "horizontal",
+                //         spacing: "20",
                         
-                        // Vietnamese radio
-                        rect {
-                            direction: "horizontal",
-                            cross_align: "center", 
-                            spacing: "6",
-                            onclick: move |_| input_mode.set(InputMode::Vietnamese),
+                //         // Vietnamese radio
+                //         rect {
+                //             direction: "horizontal",
+                //             cross_align: "center", 
+                //             spacing: "6",
+                //             onclick: move |_| input_mode.set(InputMode::Vietnamese),
                             
-                            rect {
-                                width: "16",
-                                height: "16",
-                                corner_radius: "8",
-                                border: "2 solid rgb(49, 130, 206)",
-                                background: if input_mode.read().clone() == InputMode::Vietnamese {
-                                    "rgb(49, 130, 206)"
-                                } else {
-                                    "transparent"
-                                },
-                            }
-                            label {
-                                color: "rgb(226, 232, 240)",
-                                "Tiếng Việt"
-                            }
-                        }
+                //             rect {
+                //                 width: "16",
+                //                 height: "16",
+                //                 corner_radius: "8",
+                //                 border: "2 solid rgb(49, 130, 206)",
+                //                 background: if input_mode.read().clone() == InputMode::Vietnamese {
+                //                     "rgb(49, 130, 206)"
+                //                 } else {
+                //                     "transparent"
+                //                 },
+                //             }
+                //             label {
+                //                 color: "rgb(226, 232, 240)",
+                //                 "Tiếng Việt"
+                //             }
+                //         }
                         
-                        // English radio
-                        rect {
-                            direction: "horizontal",
-                            cross_align: "center",
-                            spacing: "6", 
-                            onclick: move |_| input_mode.set(InputMode::English),
+                //         // English radio
+                //         rect {
+                //             direction: "horizontal",
+                //             cross_align: "center",
+                //             spacing: "6", 
+                //             onclick: move |_| input_mode.set(InputMode::English),
                             
-                            rect {
-                                width: "16",
-                                height: "16",
-                                corner_radius: "8",
-                                border: "2 solid rgb(49, 130, 206)",
-                                background: if input_mode.read().clone() == InputMode::English {
-                                    "rgb(49, 130, 206)"
-                                } else {
-                                    "transparent"
-                                },
-                            }
-                            label {
-                                color: "rgb(226, 232, 240)",
-                                "English"
-                            }
-                        }
-                    }
-                }
+                //             rect {
+                //                 width: "16",
+                //                 height: "16",
+                //                 corner_radius: "8",
+                //                 border: "2 solid rgb(49, 130, 206)",
+                //                 background: if input_mode.read().clone() == InputMode::English {
+                //                     "rgb(49, 130, 206)"
+                //                 } else {
+                //                     "transparent"
+                //                 },
+                //             }
+                //             label {
+                //                 color: "rgb(226, 232, 240)",
+                //                 "English"
+                //             }
+                //         }
+                //     }
+                // }
             }
         }
     }
