@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// Represents the input method for Vietnamese text
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum InputType {
     /// Telex input method (e.g., aa -> â)
     Telex,
@@ -23,7 +23,7 @@ impl fmt::Display for InputType {
 }
 
 /// Represents the character encoding for Vietnamese text
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Encoding {
     /// Unicode UTF-8 encoding
     Unicode,
@@ -44,7 +44,7 @@ impl fmt::Display for Encoding {
 }
 
 /// Represents the current input mode
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum InputMode {
     /// Vietnamese input mode
     Vietnamese,
@@ -79,6 +79,48 @@ impl Default for KeyboardConfig {
             cmd_enabled: true,
             home_enabled: true,
             beep_enabled: false,
+        }
+    }
+}
+
+/// Additional configuration options for the VKey UI
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AdvancedSettings {
+    /// Replace oa, uy with oa, uy
+    pub replace_oa_uy: bool,
+    /// Spell checking
+    pub spell_check: bool,
+    /// Auto restart on typos
+    pub auto_restart_typos: bool,
+    /// Write Vietnamese with capital letters
+    pub vietnamese_capital: bool,
+    /// Smart input mode switching
+    pub smart_switching: bool,
+    /// Remember encoding by app
+    pub remember_encoding: bool,
+    /// Allow z w j f as silent consonants
+    pub allow_silent_consonants: bool,
+    /// Auto-correct spelling mistakes
+    pub auto_correct_spelling: bool,
+    /// Temporarily disable spell check
+    pub temp_disable_spell_check: bool,
+    /// Temporarily disable VKey
+    pub temp_disable_openkey: bool,
+}
+
+impl Default for AdvancedSettings {
+    fn default() -> Self {
+        Self {
+            replace_oa_uy: false,
+            spell_check: true,
+            auto_restart_typos: false,
+            vietnamese_capital: false,
+            smart_switching: true,
+            remember_encoding: true,
+            allow_silent_consonants: false,
+            auto_correct_spelling: false,
+            temp_disable_spell_check: false,
+            temp_disable_openkey: false,
         }
     }
 } 

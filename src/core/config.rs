@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::core::types::{InputType, Encoding, InputMode, KeyboardConfig};
+use crate::core::types::{InputType, Encoding, InputMode, KeyboardConfig, AdvancedSettings};
 use crate::error::Result;
 
 /// Application configuration
@@ -9,6 +9,7 @@ pub struct AppConfig {
     pub encoding: Encoding,
     pub input_mode: InputMode,
     pub keyboard: KeyboardConfig,
+    pub advanced: AdvancedSettings,
 }
 
 impl Default for AppConfig {
@@ -18,6 +19,7 @@ impl Default for AppConfig {
             encoding: Encoding::Unicode,
             input_mode: InputMode::English,
             keyboard: KeyboardConfig::default(),
+            advanced: AdvancedSettings::default(),
         }
     }
 }
