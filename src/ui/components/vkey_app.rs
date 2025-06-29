@@ -6,7 +6,7 @@ use crate::core::{AppConfig, InputType, Encoding, InputMode, VietnameseInputProc
 #[cfg(target_os = "macos")]
 use crate::platform::{MacOSKeyboardHandler, system_integration};
 
-actions!(vkey, [CycleInputType, CycleEncoding]);
+
 
 pub struct VKeyApp {
     config: AppConfig,
@@ -133,29 +133,7 @@ impl VKeyApp {
         }
     }
 
-    /// Cycle through input types
-    fn cycle_input_type(&mut self, _: &CycleInputType, cx: &mut Context<Self>) {
-        let new_type = match self.config.input_type {
-            InputType::Telex => InputType::VNI,
-            InputType::VNI => InputType::VIQR,
-            InputType::VIQR => InputType::Telex,
-        };
-        self.set_input_type(new_type);
-        println!("Input type changed to: {:?}", new_type);
-        cx.notify();
-    }
 
-    /// Cycle through encodings
-    fn cycle_encoding(&mut self, _: &CycleEncoding, cx: &mut Context<Self>) {
-        let new_encoding = match self.config.encoding {
-            Encoding::Unicode => Encoding::TCVN3,
-            Encoding::TCVN3 => Encoding::VNIWin,
-            Encoding::VNIWin => Encoding::Unicode,
-        };
-        self.config.encoding = new_encoding;
-        println!("Encoding changed to: {:?}", new_encoding);
-        cx.notify();
-    }
 
     fn render_dropdown(&mut self, label: &str, options: &[&str], selected_index: usize, dropdown_type: &str) -> impl IntoElement {
         let label = label.to_string();
