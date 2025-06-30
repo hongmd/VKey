@@ -2,6 +2,12 @@
 
 A simple Vietnamese input method application built with Rust using GPUI and vi-rs.
 
+## Screenshot
+
+![VKey Application Interface](screenshot.png)
+
+*VKey application showing the main configuration interface with input method settings, keyboard shortcuts, and advanced options.*
+
 ## Features
 
 - Real-time Vietnamese text conversion using VNI input method

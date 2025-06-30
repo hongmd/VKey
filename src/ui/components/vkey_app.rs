@@ -142,12 +142,12 @@ impl VKeyApp {
         div()
             .flex()
             .items_center()
-            .gap_3()
+            .gap_2()
             .child(
                 div()
                     .text_color(rgb(0xe2e8f0))
                     .text_sm()
-                    .min_w_16()
+                    .w_16()
                     .child(label)
             )
             .child(
@@ -155,15 +155,15 @@ impl VKeyApp {
                     .flex()
                     .items_center()
                     .justify_between()
-                    .px_3()
-                    .py_2()
+                    .px_2()
+                    .py_1()
                     .bg(rgb(0x4a5568))
                     .border_1()
                     .border_color(rgb(0x718096))
-                    .rounded_md()
+                    .rounded_sm()
                     .cursor_pointer()
                     .hover(|this| this.bg(rgb(0x5a6c7d)))
-                    .min_w_32()
+                    .w_24()
                     .on_mouse_down(MouseButton::Left, {
                         let dropdown_type = dropdown_type.clone();
                         move |this, _, cx| {
@@ -190,8 +190,8 @@ impl VKeyApp {
                     .child(
                         div()
                             .text_color(rgb(0xa0aec0))
-                            .text_sm()
-                            .ml_2()
+                            .text_xs()
+                            .ml_1()
                             .child("▼")
                     )
             )
@@ -295,10 +295,13 @@ impl VKeyApp {
     fn render_clickable_button(&self, label: &str, is_primary: bool, action: &'static str) -> impl IntoElement {
         let label = label.to_string();
         div()
-            .px_4()
+            .px_6()
             .py_2()
+            .min_w_24()
+            .text_center()
             .rounded_md()
             .cursor_pointer()
+            .text_sm()
             .on_mouse_down(MouseButton::Left, {
                 let action = action;
                 move |_, _, cx| {
@@ -336,13 +339,13 @@ impl VKeyApp {
         div()
             .bg(rgb(0x4a5568))
             .rounded_lg()
-            .p_4()
-            .mb_4()
+            .p_3()
+            .mb_3()
             .child(
                 div()
                     .text_color(rgb(0xe2e8f0))
-                    .text_lg()
-                    .mb_4()
+                    .text_base()
+                    .mb_2()
                     .child("Điều khiển")
             )
             .child(
@@ -350,7 +353,7 @@ impl VKeyApp {
                     .flex()
                     .items_center()
                     .gap_8()
-                    .mb_4()
+                    .mb_3()
                     .child({
                         let input_type_index = match self.config.input_type {
                             InputType::Telex => 0,
@@ -381,18 +384,21 @@ impl VKeyApp {
             .child(
                 div()
                     .flex()
-                    .flex_wrap()
-                    .gap_4()
+                    .items_center()
+                    .gap_3()
+                    .mb_3()
                     .child(
                         div()
                             .text_color(rgb(0xe2e8f0))
                             .text_sm()
+                            .min_w_20()
                             .child("Phím chuyển:")
                     )
                     .child(
                         div()
                             .flex()
-                            .gap_4()
+                            .items_center()
+                            .gap_2()
                             .child(self.render_checkbox("^", self.config.keyboard.shift_enabled))
                             .child(self.render_checkbox("⌃", self.config.keyboard.ctrl_enabled))
                             .child(self.render_checkbox("⌘", self.config.keyboard.cmd_enabled))
@@ -400,9 +406,9 @@ impl VKeyApp {
                             .child(
                                 div()
                                     .bg(rgb(0x3182ce))
-                                    .px_2()
+                                    .px_1()
                                     .py_1()
-                                    .rounded_md()
+                                    .rounded_sm()
                                     .text_color(rgb(0xffffff))
                                     .text_xs()
                                     .child("I")
@@ -413,17 +419,19 @@ impl VKeyApp {
             .child(
                 div()
                     .flex()
-                    .gap_6()
-                    .mt_4()
+                    .items_center()
+                    .gap_3()
                     .child(
                         div()
                             .text_color(rgb(0xe2e8f0))
                             .text_sm()
+                            .min_w_20()
                             .child("Chế độ gõ:")
                     )
                     .child(
                         div()
                             .flex()
+                            .items_center()
                             .gap_4()
                             .child(
                                 self.render_radio_button(
@@ -445,7 +453,7 @@ impl VKeyApp {
         div()
             .flex()
             .gap_1()
-            .mb_4()
+            .mb_3()
             .child(self.render_button("Bộ gõ", true))
             .child(self.render_button("Gõ tắt", false))
             .child(self.render_button("Hệ thống", false))
@@ -456,162 +464,86 @@ impl VKeyApp {
         div()
             .bg(rgb(0x4a5568))
             .rounded_lg()
-            .p_4()
+            .p_3()
             .child(
                 div()
                     .flex()
                     .flex_col()
-                    .gap_4()
+                    .gap_3()
                     .child(
                         div()
                             .flex()
-                            .justify_between()
-                            .child(self.render_checkbox("Đặt dấu òa, úy (thay vì òa, úy)", self.config.advanced.replace_oa_uy))
-                            .child(self.render_checkbox("Kiểm tra chính tả", self.config.advanced.spell_check))
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .justify_between()
-                            .child(self.render_checkbox("Sửa lỗi gõ ý (trình duyệt, Excel,...)", self.config.advanced.auto_restart_typos))
-                            .child(self.render_checkbox("Tự khởi phục phím với tự sai", self.config.advanced.auto_restart_typos))
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .justify_between()
-                            .child(self.render_checkbox("Viết Hoa chữ cái đầu câu", self.config.advanced.vietnamese_capital))
-                            .child(self.render_checkbox("Cho phép \"z w j f\" làm phụ âm", self.config.advanced.allow_silent_consonants))
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .justify_between()
-                            .child(self.render_checkbox("Chuyển chế độ thông minh", self.config.advanced.smart_switching))
-                            .child(self.render_checkbox("Tạm tắt chính tả bằng phím ^", self.config.advanced.temp_disable_spell_check))
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .justify_between()
-                            .child(self.render_checkbox("Tự ghi nhớ bảng mã theo ứng dụng", self.config.advanced.remember_encoding))
-                            .child(self.render_checkbox("Tạm tắt VKey bằng phím ⌘", self.config.advanced.temp_disable_openkey))
-                    )
-            )
-    }
-
-    fn render_vietnamese_input_demo(&self) -> impl IntoElement {
-        div()
-            .bg(rgb(0x4a5568))
-            .rounded_lg()
-            .p_4()
-            .mb_4()
-            .child(
-                div()
-                    .text_color(rgb(0xe2e8f0))
-                    .text_lg()
-                    .mb_4()
-                    .child("Thử nghiệm nhập tiếng Việt")
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_4()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
                             .gap_4()
                             .child(
                                 div()
-                                    .text_color(rgb(0xe2e8f0))
-                                    .text_sm()
-                                    .child("Ví dụ:")
+                                    .flex_1()
+                                    .child(self.render_checkbox("Đặt dấu òa, úy (thay vì òa, úy)", self.config.advanced.replace_oa_uy))
                             )
                             .child(
                                 div()
-                                    .flex()
-                                    .gap_4()
-                                    .child(
-                                        div()
-                                            .text_color(rgb(0x90cdf4))
-                                            .text_sm()
-                                            .child(match self.config.input_type {
-                                                InputType::Telex => "Telex: viet6 nam → việt nam",
-                                                InputType::VNI => "VNI: viet65 nam → việt nam",
-                                                InputType::VIQR => "VIQR: vieät nam → việt nam",
-                                            })
-                                    )
+                                    .flex_1()
+                                    .child(self.render_checkbox("Kiểm tra chính tả", self.config.advanced.spell_check))
                             )
                     )
                     .child(
                         div()
                             .flex()
-                            .items_center()
-                            .gap_4()
+                            .gap_8()
                             .child(
                                 div()
-                                    .text_color(rgb(0xe2e8f0))
-                                    .text_sm()
-                                    .child("Hiện tại:")
+                                    .flex_1()
+                                    .child(self.render_checkbox("Sửa lỗi gõ ý (trình duyệt, Excel,...)", self.config.advanced.auto_restart_typos))
                             )
                             .child(
                                 div()
-                                    .px_3()
-                                    .py_2()
-                                    .bg(rgb(0x2d3748))
-                                    .border_1()
-                                    .border_color(rgb(0x718096))
-                                    .rounded_md()
-                                    .min_w_64()
-                                    .child(
-                                        div()
-                                            .text_color(rgb(0xe2e8f0))
-                                            .text_sm()
-                                            .child(
-                                                if self.input_text.is_empty() {
-                                                    "Nhập văn bản để thử...".to_string()
-                                                } else {
-                                                    self.input_text.clone()
-                                                }
-                                            )
-                                    )
+                                    .flex_1()
+                                    .child(self.render_checkbox("Tự khởi phục phím với tự sai", self.config.advanced.auto_restart_typos))
                             )
                     )
                     .child(
                         div()
                             .flex()
-                            .items_center()
-                            .gap_4()
+                            .gap_8()
                             .child(
                                 div()
-                                    .text_color(rgb(0xe2e8f0))
-                                    .text_sm()
-                                    .child("Buffer:")
+                                    .flex_1()
+                                    .child(self.render_checkbox("Viết Hoa chữ cái đầu câu", self.config.advanced.vietnamese_capital))
                             )
                             .child(
                                 div()
-                                    .px_3()
-                                    .py_2()
-                                    .bg(rgb(0x2d3748))
-                                    .border_1()
-                                    .border_color(rgb(0x718096))
-                                    .rounded_md()
-                                    .min_w_32()
-                                    .child(
-                                        div()
-                                            .text_color(rgb(0xfbbf24))
-                                            .text_sm()
-                                            .child(self.get_current_input_buffer())
-                                    )
+                                    .flex_1()
+                                    .child(self.render_checkbox("Cho phép \"z w j f\" làm phụ âm", self.config.advanced.allow_silent_consonants))
                             )
                     )
                     .child(
                         div()
-                            .text_color(rgb(0x9ca3af))
-                            .text_xs()
-                            .child("💡 Lưu ý: Để sử dụng đầy đủ tính năng, cần cấp quyền Accessibility cho ứng dụng trong System Preferences.")
+                            .flex()
+                            .gap_8()
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .child(self.render_checkbox("Chuyển chế độ thông minh", self.config.advanced.smart_switching))
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .child(self.render_checkbox("Tạm tắt chính tả bằng phím ^", self.config.advanced.temp_disable_spell_check))
+                            )
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .gap_8()
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .child(self.render_checkbox("Tự ghi nhớ bảng mã theo ứng dụng", self.config.advanced.remember_encoding))
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .child(self.render_checkbox("Tạm tắt VKey bằng phím ⌘", self.config.advanced.temp_disable_openkey))
+                            )
                     )
             )
     }
@@ -619,8 +551,11 @@ impl VKeyApp {
     fn render_bottom_buttons(&self) -> impl IntoElement {
         div()
             .flex()
-            .justify_between()
+            .justify_center()
+            .items_center()
+            .gap_4()
             .mt_6()
+            .mb_4()
             .child(self.render_clickable_button("✕ Kết thúc", false, "exit"))
             .child(self.render_clickable_button("👍 Mặc định", false, "default"))
             .child(self.render_clickable_button("✓ OK", true, "ok"))
@@ -635,18 +570,17 @@ impl Render for VKeyApp {
             .bg(rgb(0x2d3748))
             .w_full()
             .h_full()
-            .p_6()
+            .p_4()
             .child(
                 // Title bar
                 div()
                     .text_color(rgb(0xe2e8f0))
-                    .text_xl()
+                    .text_lg()
                     .text_center()
-                    .mb_6()
+                    .mb_4()
                     .child("VKey - Bộ gõ Tiếng Việt")
             )
             .child(self.render_control_section())
-            .child(self.render_vietnamese_input_demo())
             .child(self.render_tabs())
             .child(self.render_advanced_settings())
             .child(self.render_bottom_buttons())

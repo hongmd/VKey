@@ -16,7 +16,7 @@ fn main() {
     let result = std::panic::catch_unwind(|| {
         Application::new().run(|cx: &mut App| {
             eprintln!("Creating window...");
-            let bounds = Bounds::centered(None, size(px(800.), px(700.0)), cx);
+            let bounds = Bounds::centered(None, size(px(650.), px(560.)), cx);
             match cx.open_window(
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
