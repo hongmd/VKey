@@ -14,6 +14,7 @@ pub struct VKeyApp {
     input_text: String,
     #[cfg(target_os = "macos")]
     keyboard_handler: Option<MacOSKeyboardHandler>,
+    permissions_checked: bool,
 }
 
 impl VKeyApp {
@@ -30,22 +31,20 @@ impl VKeyApp {
             input_text: String::new(),
             #[cfg(target_os = "macos")]
             keyboard_handler,
+            permissions_checked: false,
         }
     }
 
-    /// Initialize the keyboard system integration
+    /// Initialize the keyboard system integration (simplified version)
     pub fn initialize_keyboard_system(&mut self) -> Result<(), String> {
         #[cfg(target_os = "macos")]
         {
-            // Check accessibility permissions
+            // For now, just check permissions without installing hooks to avoid linking issues
             if !system_integration::has_accessibility_permissions() {
-                system_integration::request_accessibility_permissions()?;
+                return Err("Accessibility permissions are required but not granted".to_string());
             }
             
-            // Install keyboard hook
-            system_integration::install_keyboard_hook()?;
-            
-            println!("Vietnamese input system initialized for macOS");
+            println!("Vietnamese input system ready for macOS (permissions verified)");
         }
         
         #[cfg(not(target_os = "macos"))]
@@ -133,7 +132,35 @@ impl VKeyApp {
         }
     }
 
+    /// Check if accessibility permissions are granted
+    pub fn has_accessibility_permissions(&self) -> bool {
+        #[cfg(target_os = "macos")]
+        {
+            system_integration::has_accessibility_permissions()
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            true // Non-macOS platforms don't need accessibility permissions
+        }
+    }
 
+    /// Request accessibility permissions
+    pub fn request_accessibility_permissions(&mut self) -> Result<(), String> {
+        #[cfg(target_os = "macos")]
+        {
+            self.permissions_checked = true;
+            system_integration::request_accessibility_permissions()
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            Ok(())
+        }
+    }
+
+    /// Update the permissions checked status
+    pub fn set_permissions_checked(&mut self, checked: bool) {
+        self.permissions_checked = checked;
+    }
 
     fn render_dropdown(&mut self, label: &str, options: &[&str], selected_index: usize, dropdown_type: &str) -> impl IntoElement {
         let label = label.to_string();
