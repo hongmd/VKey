@@ -35,16 +35,43 @@ impl VKeyApp {
         }
     }
 
-    /// Initialize the keyboard system integration (simplified version)
+    /// Initialize the keyboard system integration
     pub fn initialize_keyboard_system(&mut self) -> Result<(), String> {
         #[cfg(target_os = "macos")]
         {
-            // For now, just check permissions without installing hooks to avoid linking issues
+            // Check accessibility permissions
             if !system_integration::has_accessibility_permissions() {
                 return Err("Accessibility permissions are required but not granted".to_string());
             }
             
-            println!("Vietnamese input system ready for macOS (permissions verified)");
+            // Initialize the keyboard handler with system integration
+            match crate::platform::MacOSKeyboardHandler::new_with_system_integration(self.config.input_type) {
+                Ok(handler) => {
+                    self.keyboard_handler = Some(handler);
+                    println!("Vietnamese input system initialized with full system integration");
+                }
+                Err(e) => {
+                    // Fall back to basic handler without system integration
+                    println!("System integration failed ({}), using basic handler", e);
+                    self.keyboard_handler = Some(crate::platform::MacOSKeyboardHandler::new(self.config.input_type));
+                }
+            }
+            
+            // Set the initial input mode state
+            match self.config.input_mode {
+                crate::core::InputMode::Vietnamese => {
+                    if let Some(ref mut handler) = self.keyboard_handler {
+                        handler.set_enabled(true);
+                    }
+                }
+                crate::core::InputMode::English => {
+                    if let Some(ref mut handler) = self.keyboard_handler {
+                        handler.set_enabled(false);
+                    }
+                }
+            }
+            
+            println!("Vietnamese input system ready for macOS");
         }
         
         #[cfg(not(target_os = "macos"))]
@@ -54,6 +81,7 @@ impl VKeyApp {
         
         Ok(())
     }
+    
 
     /// Process a keyboard character through Vietnamese input
     pub fn process_vietnamese_input(&mut self, ch: char) -> String {
@@ -127,7 +155,7 @@ impl VKeyApp {
         self.input_text.clear();
         
         #[cfg(target_os = "macos")]
-        if let Some(ref handler) = self.keyboard_handler {
+        if let Some(ref mut handler) = self.keyboard_handler {
             handler.clear_buffer();
         }
     }
