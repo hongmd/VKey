@@ -239,13 +239,18 @@ fn do_restore_word(handle: Handle) {
 }
 
 /// Transform keys based on Vietnamese input rules
-fn transform_key(handle: Handle, key: PressedKey) -> bool {
+fn transform_key(handle: Handle, key: PressedKey, modifiers: KeyModifier) -> bool {
     eprintln!("Vietnamese enabled: {}", VIETNAMESE_ENABLED.load(Ordering::Relaxed));
     if !VIETNAMESE_ENABLED.load(Ordering::Relaxed) {
         return false; // Don't process if Vietnamese input is disabled
     }
 
-    if let PressedKey::Char(character) = key {
+    if let PressedKey::Char(mut character) = key {
+        // Apply case conversion based on Shift key
+        if modifiers.is_shift() && character.is_ascii_lowercase() {
+            character = character.to_ascii_uppercase();
+        }
+        
         if let Ok(mut processor) = INPUT_PROCESSOR.lock() {
             match processor.process_key(character) {
                 ProcessingResult::ProcessedText { text, buffer_length } => {
@@ -322,7 +327,7 @@ fn event_handler(
         }
 
         // Transform regular characters through Vietnamese input method
-        return transform_key(handle, key);
+        return transform_key(handle, key, modifiers);
     }
 
     false
