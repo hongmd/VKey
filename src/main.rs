@@ -24,12 +24,13 @@ use once_cell::sync::Lazy;
 use crate::core::{VietnameseInputProcessor, ProcessingResult};
 
 // Global state for Vietnamese input processing
-static VIETNAMESE_ENABLED: AtomicBool = AtomicBool::new(false); // Start with English by default
+static VIETNAMESE_ENABLED: AtomicBool = AtomicBool::new(true); // Start with Vietnamese enabled by default
 static INPUT_PROCESSOR: Lazy<Mutex<VietnameseInputProcessor>> = Lazy::new(|| {
     // Load config to get initial input type
     let config = AppConfig::load_default().unwrap_or_default();
-    let enabled = config.is_vietnamese_enabled();
-    VIETNAMESE_ENABLED.store(enabled, Ordering::Relaxed);
+    
+    // Always start with Vietnamese enabled by default
+    VIETNAMESE_ENABLED.store(true, Ordering::Relaxed);
     
     Mutex::new(VietnameseInputProcessor::new(config.input_type))
 });
@@ -200,6 +201,7 @@ fn do_restore_word(handle: Handle) {
 
 /// Transform keys based on Vietnamese input rules
 fn transform_key(handle: Handle, key: PressedKey) -> bool {
+    eprintln!("Vietnamese enabled: {}", VIETNAMESE_ENABLED.load(Ordering::Relaxed));
     if !VIETNAMESE_ENABLED.load(Ordering::Relaxed) {
         return false; // Don't process if Vietnamese input is disabled
     }

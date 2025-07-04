@@ -22,7 +22,7 @@ impl Default for AppConfig {
         Self {
             input_type: InputType::Telex,
             encoding: Encoding::Unicode,
-            input_mode: InputMode::English,
+            input_mode: InputMode::Vietnamese,
             keyboard: KeyboardConfig::default(),
             advanced: AdvancedSettings::default(),
             global_hotkey: Some("cmd+space".to_string()),
