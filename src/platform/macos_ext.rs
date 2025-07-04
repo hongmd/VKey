@@ -51,12 +51,39 @@ impl SystemTray {
             let pool = NSAutoreleasePool::new(nil);
             let menu = NSMenu::new(nil).autorelease();
 
-            let app = NSApp();
-            app.activateIgnoringOtherApps_(YES);
+            // Initialize NSApp (required for system tray)
+            let _app = NSApp();
+            
+            // Create status item with auto-sizing (NSVariableStatusItemLength = -1)
             let item = NSStatusBar::systemStatusBar(nil).statusItemWithLength_(-1.0);
-            let title = NSString::alloc(nil).init_str("VN");
-            NSButton::setTitle_(item, title);
-            item.setMenu_(menu);
+            
+            if item.is_null() {
+                eprintln!("ERROR: Failed to create system tray status item!");
+                panic!("Failed to create status item");
+            }
+            
+            // Retain the status item to prevent it from being deallocated
+            let _: () = msg_send![item, retain];
+            
+            // Get the button for the status item and set its title
+            let button: id = msg_send![item, button];
+            
+            if !button.is_null() {
+                let title = NSString::alloc(nil).init_str("VN");
+                let _: () = msg_send![button, setTitle: title];
+                
+                // Ensure the button is visible and enabled
+                let _: () = msg_send![button, setEnabled: true];
+                let _: () = msg_send![button, setHidden: false];
+                
+                let _: () = msg_send![title, release];
+            } else {
+                eprintln!("WARNING: System tray button is null!");
+            }
+            
+            // Set the menu and make the status item visible
+            let _: () = msg_send![item, setMenu: menu];
+            let _: () = msg_send![item, setVisible: true];
 
             let s = Self {
                 _pool: Wrapper(pool),
@@ -70,9 +97,12 @@ impl SystemTray {
 
     pub fn set_title(&mut self, title: &str) {
         unsafe {
-            let title = NSString::alloc(nil).init_str(title);
-            NSButton::setTitle_(self.item.0, title);
-            let _: () = msg_send![title, release];
+            let button: id = msg_send![self.item.0, button];
+            if !button.is_null() {
+                let title_ns = NSString::alloc(nil).init_str(title);
+                let _: () = msg_send![button, setTitle: title_ns];
+                let _: () = msg_send![title_ns, release];
+            }
         }
     }
 
@@ -125,7 +155,11 @@ impl SystemTray {
         unsafe {
             let item_title = NSString::alloc(nil).init_str(label);
             let index = self.get_menu_item_index_by_key(key);
-            NSButton::setTitle_(self.menu.0.itemAtIndex_(index), item_title);
+            let menu_item: id = msg_send![self.menu.0, itemAtIndex: index];
+            if !menu_item.is_null() {
+                let _: () = msg_send![menu_item, setTitle: item_title];
+            }
+            let _: () = msg_send![item_title, release];
         }
     }
 
@@ -136,7 +170,10 @@ impl SystemTray {
         let cb_obj = Callback::from(Box::new(cb));
         unsafe {
             let index = self.get_menu_item_index_by_key(key);
-            let _: () = msg_send![self.menu.0.itemAtIndex_(index), setTarget: cb_obj];
+            let menu_item: id = msg_send![self.menu.0, itemAtIndex: index];
+            if !menu_item.is_null() {
+                let _: () = msg_send![menu_item, setTarget: cb_obj];
+            }
         }
     }
 }

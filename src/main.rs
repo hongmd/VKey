@@ -20,6 +20,7 @@ use platform::{
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::sync::mpsc::{self, Sender};
 use once_cell::sync::Lazy;
 use crate::core::{VietnameseInputProcessor, ProcessingResult};
 
@@ -46,6 +47,31 @@ static HOTKEY_MATCHING: AtomicBool = AtomicBool::new(false);
 
 // Raw key constants
 const RAW_KEY_GLOBE: u16 = 179; // Globe key on Mac keyboards
+
+// System tray event types
+#[derive(Debug, Clone)]
+pub enum SystemTrayEvent {
+    ShowUI,
+    ToggleVietnamese,
+    SetInputTypeTelex,
+    SetInputTypeVNI,
+}
+
+// Global system tray event channel
+static SYSTEM_TRAY_SENDER: Lazy<Mutex<Option<Sender<SystemTrayEvent>>>> = Lazy::new(|| {
+    Mutex::new(None)
+});
+
+// Function to send system tray events
+pub fn send_system_tray_event(event: SystemTrayEvent) {
+    if let Ok(sender_guard) = SYSTEM_TRAY_SENDER.lock() {
+        if let Some(ref sender) = *sender_guard {
+            if let Err(e) = sender.send(event) {
+                eprintln!("Failed to send system tray event: {}", e);
+            }
+        }
+    }
+}
 
 fn main() {
     eprintln!("Starting VKey application...");
@@ -89,6 +115,13 @@ fn main() {
             gpui_component::init(cx);
 
             eprintln!("Creating window...");
+            
+            // Set up system tray event channel
+            let (sender, receiver) = mpsc::channel::<SystemTrayEvent>();
+            if let Ok(mut sender_guard) = SYSTEM_TRAY_SENDER.lock() {
+                *sender_guard = Some(sender);
+            }
+            
             let bounds = Bounds::centered(None, size(px(650.), px(560.)), cx);
             match cx.open_window(
                 WindowOptions {
@@ -98,11 +131,17 @@ fn main() {
                 |_, cx| {
                     eprintln!("Initializing VKeyApp...");
                     cx.new(|_| {
-                        let mut app = VKeyApp::new();
+                        let mut app = VKeyApp::new_with_system_tray_receiver(Some(receiver));
                         
                         // Mark permissions as checked since we did it in main
                         app.set_permissions_checked(true);
                         
+                        // Initialize the system tray
+                        match app.initialize_system_tray() {
+                            Ok(_) => eprintln!("VKeyApp system tray initialized successfully"),
+                            Err(e) => eprintln!("Failed to initialize VKeyApp system tray: {}", e),
+                        }
+
                         // Initialize the keyboard system integration
                         match app.initialize_keyboard_system() {
                             Ok(_) => {

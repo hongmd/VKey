@@ -2,9 +2,10 @@ use gpui::{
     div, prelude::*, rgb, Context, IntoElement, Render, Styled, Window, MouseButton, Entity
 };
 use crate::core::{AppConfig, InputType, Encoding, InputMode, VietnameseInputProcessor};
+use std::sync::mpsc::Receiver;
 
 #[cfg(target_os = "macos")]
-use crate::platform::{MacOSKeyboardHandler, system_integration};
+use crate::platform::{MacOSKeyboardHandler, system_integration, SystemTray};
 
 // Add gpui-component imports using correct module paths
 use gpui_component::{
@@ -17,6 +18,9 @@ pub struct VKeyApp {
     input_text: String,
     #[cfg(target_os = "macos")]
     keyboard_handler: Option<MacOSKeyboardHandler>,
+    #[cfg(target_os = "macos")]
+    system_tray: Option<SystemTray>,
+    system_tray_receiver: Option<Receiver<crate::SystemTrayEvent>>,
     permissions_checked: bool,
     // Dropdown states for proper selection tracking
     input_type_dropdown: Option<Entity<DropdownState<Vec<String>>>>,
@@ -25,6 +29,10 @@ pub struct VKeyApp {
 
 impl VKeyApp {
     pub fn new() -> Self {
+        Self::new_with_system_tray_receiver(None)
+    }
+
+    pub fn new_with_system_tray_receiver(receiver: Option<Receiver<crate::SystemTrayEvent>>) -> Self {
         // Load configuration from default location or create new one
         let config = AppConfig::load_default().unwrap_or_else(|e| {
             eprintln!("Failed to load config: {}. Using default.", e);
@@ -41,10 +49,31 @@ impl VKeyApp {
             input_text: String::new(),
             #[cfg(target_os = "macos")]
             keyboard_handler,
+            #[cfg(target_os = "macos")]
+            system_tray: None,
+            system_tray_receiver: receiver,
             permissions_checked: false,
             input_type_dropdown: None,
             encoding_dropdown: None,
         }
+    }
+
+    /// Initialize the system tray
+    pub fn initialize_system_tray(&mut self) -> Result<(), String> {
+        #[cfg(target_os = "macos")]
+        {
+            let system_tray = SystemTray::new();
+            self.system_tray = Some(system_tray);
+            self.setup_system_tray_callbacks()?;
+            println!("System tray initialized successfully");
+        }
+        
+        #[cfg(not(target_os = "macos"))]
+        {
+            println!("System tray: Platform not supported");
+        }
+        
+        Ok(())
     }
 
     /// Initialize the keyboard system integration
@@ -125,8 +154,12 @@ impl VKeyApp {
         match self.config.toggle_vietnamese_mode() {
             Ok(_) => {
                 #[cfg(target_os = "macos")]
-                if let Some(ref mut handler) = self.keyboard_handler {
-                    handler.set_enabled(self.config.is_vietnamese_enabled());
+                {
+                    if let Some(ref mut handler) = self.keyboard_handler {
+                        handler.set_enabled(self.config.is_vietnamese_enabled());
+                    }
+                    self.update_system_tray_state();
+                    self.update_system_tray_title();
                 }
                 println!("Vietnamese input toggled to: {}", 
                     if self.config.is_vietnamese_enabled() { "ON" } else { "OFF" });
@@ -142,8 +175,12 @@ impl VKeyApp {
         match self.config.set_vietnamese_mode(enabled) {
             Ok(_) => {
                 #[cfg(target_os = "macos")]
-                if let Some(ref mut handler) = self.keyboard_handler {
-                    handler.set_enabled(enabled);
+                {
+                    if let Some(ref mut handler) = self.keyboard_handler {
+                        handler.set_enabled(enabled);
+                    }
+                    self.update_system_tray_state();
+                    self.update_system_tray_title();
                 }
                 println!("Vietnamese input set to: {}", 
                     if enabled { "ON" } else { "OFF" });
@@ -165,8 +202,12 @@ impl VKeyApp {
         }
         
         #[cfg(target_os = "macos")]
-        if let Some(ref mut handler) = self.keyboard_handler {
-            handler.set_input_type(input_type);
+        {
+            if let Some(ref mut handler) = self.keyboard_handler {
+                handler.set_input_type(input_type);
+            }
+            self.update_system_tray_state();
+            self.update_system_tray_title();
         }
     }
     
@@ -188,9 +229,13 @@ impl VKeyApp {
                 self.vietnamese_processor.set_input_type(self.config.input_type);
                 
                 #[cfg(target_os = "macos")]
-                if let Some(ref mut handler) = self.keyboard_handler {
-                    handler.set_input_type(self.config.input_type);
-                    handler.set_enabled(self.config.is_vietnamese_enabled());
+                {
+                    if let Some(ref mut handler) = self.keyboard_handler {
+                        handler.set_input_type(self.config.input_type);
+                        handler.set_enabled(self.config.is_vietnamese_enabled());
+                    }
+                    self.update_system_tray_state();
+                    self.update_system_tray_title();
                 }
                 
                 println!("Configuration reset to defaults");
@@ -250,6 +295,148 @@ impl VKeyApp {
     /// Update the permissions checked status
     pub fn set_permissions_checked(&mut self, checked: bool) {
         self.permissions_checked = checked;
+    }
+
+    /// Setup system tray menu callbacks
+    #[cfg(target_os = "macos")]
+    fn setup_system_tray_callbacks(&mut self) -> Result<(), String> {
+        use crate::platform::SystemTrayMenuItemKey;
+        
+        if let Some(ref system_tray) = self.system_tray {
+            // Show UI callback
+            system_tray.set_menu_item_callback(SystemTrayMenuItemKey::ShowUI, || {
+                println!("System tray: Show UI clicked");
+                crate::send_system_tray_event(crate::SystemTrayEvent::ShowUI);
+            });
+
+            // Enable/Disable Vietnamese input callback
+            system_tray.set_menu_item_callback(SystemTrayMenuItemKey::Enable, || {
+                println!("System tray: Toggle Vietnamese input");
+                crate::send_system_tray_event(crate::SystemTrayEvent::ToggleVietnamese);
+            });
+
+            // Switch to Telex input method
+            system_tray.set_menu_item_callback(SystemTrayMenuItemKey::TypingMethodTelex, || {
+                println!("System tray: Switch to Telex");
+                crate::send_system_tray_event(crate::SystemTrayEvent::SetInputTypeTelex);
+            });
+
+            // Switch to VNI input method
+            system_tray.set_menu_item_callback(SystemTrayMenuItemKey::TypingMethodVNI, || {
+                println!("System tray: Switch to VNI");
+                crate::send_system_tray_event(crate::SystemTrayEvent::SetInputTypeVNI);
+            });
+
+            // Exit application callback
+            system_tray.set_menu_item_callback(SystemTrayMenuItemKey::Exit, || {
+                println!("System tray: Exit application");
+                std::process::exit(0);
+            });
+
+            // Update the initial state of menu items
+            self.update_system_tray_state();
+            self.update_system_tray_title();
+        }
+        
+        Ok(())
+    }
+
+    /// Update system tray menu items to reflect current app state
+    #[cfg(target_os = "macos")]
+    fn update_system_tray_state(&self) {
+        use crate::platform::SystemTrayMenuItemKey;
+        
+        if let Some(ref system_tray) = self.system_tray {
+            // Update Vietnamese input toggle state
+            let vietnamese_enabled = self.config.is_vietnamese_enabled();
+            let enable_text = if vietnamese_enabled {
+                "Tắt gõ tiếng việt"
+            } else {
+                "Bật gõ tiếng việt"
+            };
+            system_tray.set_menu_item_title(SystemTrayMenuItemKey::Enable, enable_text);
+
+            // Update input method indicators
+            match self.config.input_type {
+                crate::core::InputType::Telex => {
+                    system_tray.set_menu_item_title(SystemTrayMenuItemKey::TypingMethodTelex, "Telex ✓");
+                    system_tray.set_menu_item_title(SystemTrayMenuItemKey::TypingMethodVNI, "VNI");
+                }
+                crate::core::InputType::VNI => {
+                    system_tray.set_menu_item_title(SystemTrayMenuItemKey::TypingMethodTelex, "Telex");
+                    system_tray.set_menu_item_title(SystemTrayMenuItemKey::TypingMethodVNI, "VNI ✓");
+                }
+                _ => {
+                    system_tray.set_menu_item_title(SystemTrayMenuItemKey::TypingMethodTelex, "Telex");
+                    system_tray.set_menu_item_title(SystemTrayMenuItemKey::TypingMethodVNI, "VNI");
+                }
+            }
+
+            // Note: SystemTray::set_title requires &mut self, so we can't call it here
+            // This is handled by the update_system_tray_title method instead
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    fn setup_system_tray_callbacks(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// Update system tray title based on current state
+    #[cfg(target_os = "macos")]
+    pub fn update_system_tray_title(&mut self) {
+        if let Some(ref mut system_tray) = self.system_tray {
+            let vietnamese_enabled = self.config.is_vietnamese_enabled();
+            let title = if vietnamese_enabled {
+                match self.config.input_type {
+                    crate::core::InputType::Telex => "VN",
+                    crate::core::InputType::VNI => "VN",
+                    _ => "VN",
+                }
+            } else {
+                "EN"
+            };
+            system_tray.set_title(title);
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    pub fn update_system_tray_title(&mut self) {
+        // No-op for non-macOS platforms
+    }
+
+    /// Process pending system tray events
+    pub fn process_system_tray_events(&mut self) {
+        let mut events = Vec::new();
+        
+        // Collect all pending events first
+        if let Some(ref receiver) = self.system_tray_receiver {
+            while let Ok(event) = receiver.try_recv() {
+                events.push(event);
+            }
+        }
+        
+        // Process the events
+        for event in events {
+            match event {
+                crate::SystemTrayEvent::ShowUI => {
+                    println!("Processing system tray event: Show UI");
+                    // TODO: Implement showing the main window
+                }
+                crate::SystemTrayEvent::ToggleVietnamese => {
+                    println!("Processing system tray event: Toggle Vietnamese");
+                    self.toggle_vietnamese_input();
+                }
+                crate::SystemTrayEvent::SetInputTypeTelex => {
+                    println!("Processing system tray event: Set input type Telex");
+                    self.set_input_type(InputType::Telex);
+                }
+                crate::SystemTrayEvent::SetInputTypeVNI => {
+                    println!("Processing system tray event: Set input type VNI");
+                    self.set_input_type(InputType::VNI);
+                }
+            }
+        }
     }
 
     fn render_dropdown(&mut self, label: &str, options: &[&str], selected_index: usize, dropdown_type: &str, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -792,6 +979,8 @@ impl VKeyApp {
 
 impl Render for VKeyApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Process any pending system tray events
+        self.process_system_tray_events();
         div()
             .flex()
             .flex_col()
