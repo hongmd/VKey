@@ -18,8 +18,9 @@ use core_graphics::{
 };
 use objc::{class, msg_send, sel, sel_impl};
 
-pub use macos_ext::SystemTray;
-pub use macos_ext::SystemTrayMenuItemKey;
+// Note: SystemTray and SystemTrayMenuItemKey are not currently used
+// pub use macos_ext::SystemTray;
+// pub use macos_ext::SystemTrayMenuItemKey;
 use once_cell::sync::Lazy;
 
 use crate::platform::KEYBOARD_LAYOUT_CHARACTER_MAP;

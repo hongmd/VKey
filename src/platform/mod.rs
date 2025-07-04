@@ -2,7 +2,7 @@
 // This module contains platform-specific implementations
 // for Vietnamese input method integration
 
-use core_graphics::event::{CGEventTapProxy, CGEventType};
+use core_graphics::event::{CGEventTapProxy};
 use std::collections::HashMap;
 use once_cell::sync::OnceCell;
 use bitflags::bitflags;

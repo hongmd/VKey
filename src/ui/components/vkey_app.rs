@@ -1,12 +1,15 @@
 use gpui::{
-    div, prelude::*, rgb, Context, IntoElement, Render, Styled, Window, MouseButton,
+    div, prelude::*, rgb, Context, IntoElement, Render, Styled, Window, MouseButton, Entity
 };
 use crate::core::{AppConfig, InputType, Encoding, InputMode, VietnameseInputProcessor};
 
 #[cfg(target_os = "macos")]
 use crate::platform::{MacOSKeyboardHandler, system_integration};
 
-
+// Add gpui-component imports using correct module paths
+use gpui_component::{
+    dropdown::{Dropdown, DropdownState, DropdownEvent},
+};
 
 pub struct VKeyApp {
     config: AppConfig,
@@ -15,11 +18,18 @@ pub struct VKeyApp {
     #[cfg(target_os = "macos")]
     keyboard_handler: Option<MacOSKeyboardHandler>,
     permissions_checked: bool,
+    // Dropdown states for proper selection tracking
+    input_type_dropdown: Option<Entity<DropdownState<Vec<String>>>>,
+    encoding_dropdown: Option<Entity<DropdownState<Vec<String>>>>,
 }
 
 impl VKeyApp {
     pub fn new() -> Self {
-        let config = AppConfig::default();
+        // Load configuration from default location or create new one
+        let config = AppConfig::load_default().unwrap_or_else(|e| {
+            eprintln!("Failed to load config: {}. Using default.", e);
+            AppConfig::default()
+        });
         let vietnamese_processor = VietnameseInputProcessor::new(config.input_type);
         
         #[cfg(target_os = "macos")]
@@ -32,6 +42,8 @@ impl VKeyApp {
             #[cfg(target_os = "macos")]
             keyboard_handler,
             permissions_checked: false,
+            input_type_dropdown: None,
+            encoding_dropdown: None,
         }
     }
 
@@ -108,33 +120,83 @@ impl VKeyApp {
         }
     }
 
+    /// Toggle Vietnamese input on/off
+    pub fn toggle_vietnamese_input(&mut self) {
+        match self.config.toggle_vietnamese_mode() {
+            Ok(_) => {
+                #[cfg(target_os = "macos")]
+                if let Some(ref mut handler) = self.keyboard_handler {
+                    handler.set_enabled(self.config.is_vietnamese_enabled());
+                }
+                println!("Vietnamese input toggled to: {}", 
+                    if self.config.is_vietnamese_enabled() { "ON" } else { "OFF" });
+            }
+            Err(e) => {
+                eprintln!("Failed to toggle Vietnamese input: {}", e);
+            }
+        }
+    }
+    
+    /// Set Vietnamese input mode explicitly
+    pub fn set_vietnamese_input(&mut self, enabled: bool) {
+        match self.config.set_vietnamese_mode(enabled) {
+            Ok(_) => {
+                #[cfg(target_os = "macos")]
+                if let Some(ref mut handler) = self.keyboard_handler {
+                    handler.set_enabled(enabled);
+                }
+                println!("Vietnamese input set to: {}", 
+                    if enabled { "ON" } else { "OFF" });
+            }
+            Err(e) => {
+                eprintln!("Failed to set Vietnamese input: {}", e);
+            }
+        }
+    }
+
     /// Handle input type change
     pub fn set_input_type(&mut self, input_type: InputType) {
         self.config.input_type = input_type;
         self.vietnamese_processor.set_input_type(input_type);
+        
+        // Save configuration
+        if let Err(e) = self.config.update_and_save() {
+            eprintln!("Failed to save config after input type change: {}", e);
+        }
         
         #[cfg(target_os = "macos")]
         if let Some(ref mut handler) = self.keyboard_handler {
             handler.set_input_type(input_type);
         }
     }
-
-    /// Toggle Vietnamese input on/off
-    pub fn toggle_vietnamese_input(&mut self) {
-        match self.config.input_mode {
-            InputMode::Vietnamese => {
-                self.config.input_mode = InputMode::English;
+    
+    /// Handle encoding change
+    pub fn set_encoding(&mut self, encoding: Encoding) {
+        self.config.encoding = encoding;
+        
+        // Save configuration
+        if let Err(e) = self.config.update_and_save() {
+            eprintln!("Failed to save config after encoding change: {}", e);
+        }
+    }
+    
+    /// Reset configuration to defaults
+    pub fn reset_to_defaults(&mut self) {
+        match self.config.reset_to_default() {
+            Ok(_) => {
+                // Update processor and handler with new settings
+                self.vietnamese_processor.set_input_type(self.config.input_type);
+                
                 #[cfg(target_os = "macos")]
                 if let Some(ref mut handler) = self.keyboard_handler {
-                    handler.set_enabled(false);
+                    handler.set_input_type(self.config.input_type);
+                    handler.set_enabled(self.config.is_vietnamese_enabled());
                 }
+                
+                println!("Configuration reset to defaults");
             }
-            InputMode::English => {
-                self.config.input_mode = InputMode::Vietnamese;
-                #[cfg(target_os = "macos")]
-                if let Some(ref mut handler) = self.keyboard_handler {
-                    handler.set_enabled(true);
-                }
+            Err(e) => {
+                eprintln!("Failed to reset configuration: {}", e);
             }
         }
     }
@@ -190,10 +252,40 @@ impl VKeyApp {
         self.permissions_checked = checked;
     }
 
-    fn render_dropdown(&mut self, label: &str, options: &[&str], selected_index: usize, dropdown_type: &str) -> impl IntoElement {
+    fn render_dropdown(&mut self, label: &str, options: &[&str], selected_index: usize, dropdown_type: &str, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let label = label.to_string();
-        let selected_option = options[selected_index].to_string();
-        let dropdown_type = dropdown_type.to_string();
+        
+        // Convert options to Vec<String> which implements DropdownItem
+        let dropdown_options: Vec<String> = options.iter().map(|&s| s.to_string()).collect();
+        
+        // Get or create the appropriate dropdown state
+        let dropdown_state = match dropdown_type {
+            "input_type" => {
+                if self.input_type_dropdown.is_none() {
+                    let state = cx.new(|cx| DropdownState::new(dropdown_options, Some(selected_index), window, cx));
+                    let _ = cx.subscribe_in(&state, window, Self::on_input_type_dropdown_event);
+                    self.input_type_dropdown = Some(state.clone());
+                    state
+                } else {
+                    self.input_type_dropdown.as_ref().unwrap().clone()
+                }
+            }
+            "encoding" => {
+                if self.encoding_dropdown.is_none() {
+                    let state = cx.new(|cx| DropdownState::new(dropdown_options, Some(selected_index), window, cx));
+                    let _ = cx.subscribe_in(&state, window, Self::on_encoding_dropdown_event);
+                    self.encoding_dropdown = Some(state.clone());
+                    state
+                } else {
+                    self.encoding_dropdown.as_ref().unwrap().clone()
+                }
+            }
+            _ => {
+                // Fallback for unknown dropdown types
+                cx.new(|cx| DropdownState::new(dropdown_options, Some(selected_index), window, cx))
+            }
+        };
+        
         div()
             .flex()
             .items_center()
@@ -206,50 +298,60 @@ impl VKeyApp {
                     .child(label)
             )
             .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .px_2()
-                    .py_1()
-                    .bg(rgb(0x4a5568))
-                    .border_1()
-                    .border_color(rgb(0x718096))
-                    .rounded_sm()
-                    .cursor_pointer()
-                    .hover(|this| this.bg(rgb(0x5a6c7d)))
-                    .w_24()
-                    .on_mouse_down(MouseButton::Left, {
-                        let dropdown_type = dropdown_type.clone();
-                        move |this, _, cx| {
-                            // Cycle through the dropdown options
-                            let _ = this; // silence unused variable warning
-                            match dropdown_type.as_str() {
-                                "input_type" => {
-                                    println!("Input type dropdown clicked - cycling input types");
-                                }
-                                "encoding" => {
-                                    println!("Encoding dropdown clicked - cycling encodings");
-                                }
-                                _ => {}
-                            }
-
-                        }
-                    })
-                    .child(
-                        div()
-                            .text_color(rgb(0xe2e8f0))
-                            .text_sm()
-                            .child(selected_option)
-                    )
-                    .child(
-                        div()
-                            .text_color(rgb(0xa0aec0))
-                            .text_xs()
-                            .ml_1()
-                            .child("▼")
-                    )
+                // Use gpui-component Dropdown with proper state
+                Dropdown::new(&dropdown_state).cleanable()
+                    .placeholder("Select...")
             )
+    }
+
+    fn on_input_type_dropdown_event(
+        &mut self,
+        _: &Entity<DropdownState<Vec<String>>>,
+        event: &DropdownEvent<Vec<String>>,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            DropdownEvent::Confirm(value) => {
+                println!("Selected input type: {:?}", value);
+                // Convert the selected string to InputType and update config
+                if let Some(val) = value {
+                    let input_type = match val.as_str() {
+                        "Telex" => InputType::Telex,
+                        "VNI" => InputType::VNI,
+                        "VIQR" => InputType::VIQR,
+                        _ => InputType::Telex, // Default fallback
+                    };
+                    self.set_input_type(input_type);
+                    cx.notify();
+                }
+            }
+        }
+    }
+
+    fn on_encoding_dropdown_event(
+        &mut self,
+        _: &Entity<DropdownState<Vec<String>>>,
+        event: &DropdownEvent<Vec<String>>,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            DropdownEvent::Confirm(value) => {
+                println!("Selected encoding: {:?}", value);
+                // Convert the selected string to Encoding and update config
+                if let Some(val) = value {
+                    let encoding = match val.as_str() {
+                        "Unicode" => Encoding::Unicode,
+                        "TCVN3" => Encoding::TCVN3,
+                        "VNI-Win" => Encoding::VNIWin,
+                        _ => Encoding::Unicode, // Default fallback
+                    };
+                    self.set_encoding(encoding);
+                    cx.notify();
+                }
+            }
+        }
     }
 
     fn render_checkbox(&self, label: &str, checked: bool) -> impl IntoElement {
@@ -290,13 +392,47 @@ impl VKeyApp {
             )
     }
 
+    fn render_vietnamese_toggle(&self) -> impl IntoElement {
+        div()
+            .flex()
+            .items_center()
+            .gap_4()
+            .child(
+                div()
+                    .cursor_pointer()
+                    .on_mouse_down(MouseButton::Left, {
+                        move |_, _, _| {
+                            println!("Vietnamese mode clicked");
+                            // For now, just log - proper state update would need context
+                        }
+                    })
+                    .child(self.render_radio_button(
+                        "Tiếng Việt",
+                        matches!(self.config.input_mode, InputMode::Vietnamese)
+                    ))
+            )
+            .child(
+                div()
+                    .cursor_pointer()
+                    .on_mouse_down(MouseButton::Left, {
+                        move |_, _, _| {
+                            println!("English mode clicked");
+                            // For now, just log - proper state update would need context
+                        }
+                    })
+                    .child(self.render_radio_button(
+                        "English",
+                        matches!(self.config.input_mode, InputMode::English)
+                    ))
+            )
+    }
+
     fn render_radio_button(&self, label: &str, selected: bool) -> impl IntoElement {
         let label = label.to_string();
         div()
             .flex()
             .items_center()
             .gap_3()
-            .cursor_pointer()
             .child(
                 div()
                     .size_4()
@@ -371,7 +507,7 @@ impl VKeyApp {
                         }
                         "default" => {
                             println!("Default button clicked - resetting to default configuration");
-                            // We'll implement state reset differently since we can't access self here
+                            // For now, just log - proper state update would need context
                         }
                         _ => {}
                     }
@@ -390,7 +526,56 @@ impl VKeyApp {
             .child(label)
     }
 
-    fn render_control_section(&mut self) -> impl IntoElement {
+    fn render_hotkey_config(&self) -> impl IntoElement {
+        div()
+            .flex()
+            .items_center()
+            .gap_3()
+            .mb_3()
+            .child(
+                div()
+                    .text_color(rgb(0xe2e8f0))
+                    .text_sm()
+                    .min_w_20()
+                    .child("Phím tắt:")
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .px_3()
+                    .py_2()
+                    .bg(rgb(0x2d3748))
+                    .border_1()
+                    .border_color(rgb(0x718096))
+                    .rounded_md()
+                    .cursor_pointer()
+                    .hover(|this| this.bg(rgb(0x374151)))
+                    .min_w_40()
+                    .on_mouse_down(MouseButton::Left, {
+                        move |_, _, _| {
+                            println!("Hotkey config clicked - cycling hotkeys");
+                            // For now, just log - proper state update would need context
+                        }
+                    })
+                    .child(
+                        div()
+                            .text_color(rgb(0xe2e8f0))
+                            .text_sm()
+                            .child(self.config.get_hotkey_description())
+                    )
+                    .child(
+                        div()
+                            .text_color(rgb(0xa0aec0))
+                            .text_xs()
+                            .ml_2()
+                            .child("▼")
+                    )
+            )
+    }
+
+    fn render_control_section(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .bg(rgb(0x4a5568))
             .rounded_lg()
@@ -419,7 +604,9 @@ impl VKeyApp {
                             "Kiểu gõ:",
                             &["Telex", "VNI", "VIQR"],
                             input_type_index,
-                            "input_type"
+                            "input_type",
+                            window,
+                            cx
                         )
                     })
                     .child({
@@ -432,10 +619,13 @@ impl VKeyApp {
                             "Bảng mã:",
                             &["Unicode", "TCVN3", "VNI-Win"],
                             encoding_index,
-                            "encoding"
+                            "encoding",
+                            window,
+                            cx
                         )
                     })
             )
+            .child(self.render_hotkey_config())
             .child(
                 div()
                     .flex()
@@ -483,24 +673,7 @@ impl VKeyApp {
                             .min_w_20()
                             .child("Chế độ gõ:")
                     )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_4()
-                            .child(
-                                self.render_radio_button(
-                                    "Tiếng Việt",
-                                    matches!(self.config.input_mode, InputMode::Vietnamese)
-                                )
-                            )
-                            .child(
-                                self.render_radio_button(
-                                    "English",
-                                    matches!(self.config.input_mode, InputMode::English)
-                                )
-                            )
-                    )
+                    .child(self.render_vietnamese_toggle())
             )
     }
 
@@ -618,7 +791,7 @@ impl VKeyApp {
 }
 
 impl Render for VKeyApp {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .flex()
             .flex_col()
@@ -635,7 +808,7 @@ impl Render for VKeyApp {
                     .mb_4()
                     .child("VKey - Bộ gõ Tiếng Việt")
             )
-            .child(self.render_control_section())
+            .child(self.render_control_section(window, cx))
             .child(self.render_tabs())
             .child(self.render_advanced_settings())
             .child(self.render_bottom_buttons())

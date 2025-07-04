@@ -9,24 +9,34 @@ mod ui;
 use std::thread;
 
 use ui::VKeyApp;
+use core::AppConfig;
 
 #[cfg(target_os = "macos")]
 use platform::system_integration;
 use platform::{
-    add_app_change_callback, ensure_accessibility_permission, run_event_listener, send_backspace,
-    send_string, CallbackFn, EventTapType, Handle, KeyModifier, PressedKey, KEY_DELETE, KEY_ENTER, KEY_ESCAPE,
-    KEY_SPACE, KEY_TAB,
+    run_event_listener, send_backspace, send_string, CallbackFn, EventTapType, Handle, KeyModifier, PressedKey, KEY_ENTER, KEY_ESCAPE,
+    KEY_TAB,
 };
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use once_cell::sync::Lazy;
-use crate::core::{VietnameseInputProcessor, InputType, ProcessingResult};
+use crate::core::{VietnameseInputProcessor, ProcessingResult};
 
 // Global state for Vietnamese input processing
-static VIETNAMESE_ENABLED: AtomicBool = AtomicBool::new(true); // Start with Vietnamese enabled for testing
+static VIETNAMESE_ENABLED: AtomicBool = AtomicBool::new(false); // Start with English by default
 static INPUT_PROCESSOR: Lazy<Mutex<VietnameseInputProcessor>> = Lazy::new(|| {
-    Mutex::new(VietnameseInputProcessor::new(InputType::Telex))
+    // Load config to get initial input type
+    let config = AppConfig::load_default().unwrap_or_default();
+    let enabled = config.is_vietnamese_enabled();
+    VIETNAMESE_ENABLED.store(enabled, Ordering::Relaxed);
+    
+    Mutex::new(VietnameseInputProcessor::new(config.input_type))
+});
+
+// Global configuration
+static GLOBAL_CONFIG: Lazy<Mutex<AppConfig>> = Lazy::new(|| {
+    Mutex::new(AppConfig::load_default().unwrap_or_default())
 });
 
 // Global hotkey state
@@ -75,6 +85,8 @@ fn main() {
         }
 
         Application::new().run(|cx: &mut App| {
+            gpui_component::init(cx);
+
             eprintln!("Creating window...");
             let bounds = Bounds::centered(None, size(px(650.), px(560.)), cx);
             match cx.open_window(
@@ -134,16 +146,43 @@ fn main() {
     }
 }
 
-/// Toggle Vietnamese input mode
+/// Toggle Vietnamese input mode with config sync
 fn toggle_vietnamese() {
     let current = VIETNAMESE_ENABLED.load(Ordering::Relaxed);
     VIETNAMESE_ENABLED.store(!current, Ordering::Relaxed);
+    
+    // Update global config
+    if let Ok(mut config) = GLOBAL_CONFIG.lock() {
+        let _ = config.set_vietnamese_mode(!current);
+    }
     
     if let Ok(mut processor) = INPUT_PROCESSOR.lock() {
         processor.clear_buffer();
     }
     
     eprintln!("Vietnamese input: {}", if !current { "enabled" } else { "disabled" });
+}
+
+/// Check if the current key combination matches the configured hotkey
+fn is_hotkey_match(modifiers: KeyModifier, key: Option<PressedKey>) -> bool {
+    if let Ok(config) = GLOBAL_CONFIG.lock() {
+        if let Some(ref hotkey) = config.global_hotkey {
+            // Parse hotkey string and compare
+            // For now, default to cmd+space
+            if hotkey.contains("cmd") && hotkey.contains("space") {
+                return modifiers.is_super() && key.map_or(false, |k| match k {
+                    PressedKey::Char(ch) => ch == ' ',
+                    _ => false,
+                });
+            }
+        }
+    }
+    
+    // Default hotkey: cmd+space
+    modifiers.is_super() && key.map_or(false, |k| match k {
+        PressedKey::Char(ch) => ch == ' ',
+        _ => false,
+    })
 }
 
 /// Restore the original word by sending backspaces and the original text
@@ -160,74 +199,42 @@ fn do_restore_word(handle: Handle) {
 }
 
 /// Transform keys based on Vietnamese input rules
-fn do_transform_keys(handle: Handle, _force: bool) -> bool {
-    if let Ok(mut processor) = INPUT_PROCESSOR.lock() {
-        let buffer = processor.get_current_buffer();
-        if buffer.is_empty() {
-            return false;
-        }
-        
-        // Get the current transformed text
-        let current_text = get_transformed_text(&processor);
-        
-        // If transformation occurred, replace the text
-        if current_text != buffer {
-            // Send backspaces to clear original text
-            let _ = send_backspace(handle, buffer.chars().count());
-            // Send transformed text
-            let _ = send_string(handle, &current_text);
-            return true;
+fn transform_key(handle: Handle, key: PressedKey) -> bool {
+    if !VIETNAMESE_ENABLED.load(Ordering::Relaxed) {
+        return false; // Don't process if Vietnamese input is disabled
+    }
+
+    if let PressedKey::Char(character) = key {
+        if let Ok(mut processor) = INPUT_PROCESSOR.lock() {
+            match processor.process_key(character) {
+                ProcessingResult::ProcessedText { text, buffer_length } => {
+                    // Clear previous text and send new text
+                    if buffer_length > 0 {
+                        let _ = send_backspace(handle, buffer_length);
+                    }
+                    let _ = send_string(handle, &text);
+                    return true; // Block original key
+                }
+                ProcessingResult::PassThrough(_) => {
+                    // Let the original character through
+                    return false;
+                }
+                ProcessingResult::ClearAndPassBackspace => {
+                    // Clear buffer and let backspace through
+                    return false;
+                }
+                ProcessingResult::CommitAndPassThrough(_) => {
+                    // Commit current buffer and let character through
+                    return false;
+                }
+            }
         }
     }
+    
     false
 }
 
-/// Get transformed text from the processor
-fn get_transformed_text(processor: &VietnameseInputProcessor) -> String {
-    let buffer = processor.get_current_buffer();
-    if buffer.is_empty() {
-        return String::new();
-    }
-    
-    // For now, just return the buffer - the transformation happens in process_key
-    // In a more complete implementation, this could apply additional transformations
-    eprintln!("Getting transformed text from buffer: '{}'", buffer);
-    buffer.to_string()
-}
-
-/// Handle macro replacement (placeholder)
-fn do_macro_replace(_handle: Handle, _macro_target: &str) {
-    // Placeholder for macro functionality
-}
-
-/// Handle the result of Vietnamese processing
-fn handle_processing_result(handle: Handle, result: ProcessingResult) -> bool {
-    match result {
-        ProcessingResult::PassThrough(_) => {
-            eprintln!("PassThrough - letting original key through");
-            false // Let the original key through
-        }
-        ProcessingResult::ProcessedText { text, buffer_length } => {
-            eprintln!("ProcessedText - replacing with: '{}'", text);
-            // Send backspaces to clear the original buffer
-            if buffer_length > 0 {
-                let _ = send_backspace(handle, buffer_length);
-            }
-            // Send the processed text
-            let _ = send_string(handle, &text);
-            true // Suppress the original keystroke
-        }
-        ProcessingResult::ClearAndPassBackspace => {
-            eprintln!("ClearAndPassBackspace - clearing and passing backspace");
-            false // Let the original backspace through
-        }
-        ProcessingResult::CommitAndPassThrough(_) => {
-            eprintln!("CommitAndPassThrough - committing and passing through");
-            false // Let the original key through
-        }
-    }
-}
-
+/// Main event handler for keyboard events
 fn event_handler(
     handle: Handle,
     event_type: EventTapType,
@@ -235,104 +242,47 @@ fn event_handler(
     modifiers: KeyModifier,
 ) -> bool {
     eprintln!("Event received: type={:?}, key={:?}, modifiers={:?}", event_type, pressed_key, modifiers);
-    
-    let pressed_key_code = pressed_key.and_then(|p| match p {
-        PressedKey::Char(c) => Some(c),
-        _ => None,
-    });
 
-    // Handle modifier key changes
+    unsafe {
+        HOTKEY_MODIFIERS = modifiers;
+    }
+
+    // Handle hotkey combinations
     if event_type == EventTapType::FlagsChanged {
-        unsafe {
-            if modifiers.is_empty() {
-                // Modifier keys are released
-                if HOTKEY_MATCHING.load(Ordering::Relaxed) {
-                    toggle_vietnamese();
-                }
-                HOTKEY_MODIFIERS = KeyModifier::MODIFIER_NONE;
-                HOTKEY_MATCHING.store(false, Ordering::Relaxed);
-            } else {
-                HOTKEY_MODIFIERS = modifiers;
-            }
-        }
-        return false;
+        let hotkey_active = unsafe { HOTKEY_MODIFIERS.is_super() };
+        HOTKEY_MATCHING.store(hotkey_active, Ordering::Relaxed);
+        return false; // Don't block modifier key events
     }
 
-    // Check for hotkey combinations (simple Cmd+Space for now)
-    let is_hotkey_matched = modifiers.is_super() && pressed_key_code == Some(KEY_SPACE);
-    HOTKEY_MATCHING.store(is_hotkey_matched, Ordering::Relaxed);
+    // Check for toggle hotkey
+    if let Some(key) = pressed_key {
+        if is_hotkey_match(modifiers, Some(key)) {
+            toggle_vietnamese();
+            return true; // Block the hotkey from reaching other applications
+        }
 
-    if let Some(pressed_key) = pressed_key {
-        match pressed_key {
-            PressedKey::Raw(raw_keycode) => {
-                if raw_keycode == RAW_KEY_GLOBE {
-                    toggle_vietnamese();
-                    return true;
-                }
-            }
-            PressedKey::Char(keycode) => {
-                let vietnamese_enabled = VIETNAMESE_ENABLED.load(Ordering::Relaxed);
-                
-                if vietnamese_enabled {
-                    match keycode {
-                        KEY_SPACE => {
-                            // Handle space properly - commit current buffer first
-                            if let Ok(mut processor) = INPUT_PROCESSOR.lock() {
-                                eprintln!("Processing space - buffer before: '{}'", processor.get_current_buffer());
-                                let result = processor.handle_space();
-                                eprintln!("Space result: {:?}", result);
-                                
-                                return handle_processing_result(handle, result);
-                            }
-                        }
-                        KEY_ENTER | KEY_TAB | KEY_ESCAPE => {
-                            // Commit current buffer for other commit keys
-                            if let Ok(mut processor) = INPUT_PROCESSOR.lock() {
-                                processor.clear_buffer();
-                            }
-                        }
-                        KEY_DELETE => {
-                            if modifiers.is_empty() || modifiers.is_shift() {
-                                // Handle backspace in Vietnamese context
-                                if let Ok(mut processor) = INPUT_PROCESSOR.lock() {
-                                    if !processor.get_current_buffer().is_empty() {
-                                        eprintln!("Processing backspace - buffer before: '{}'", processor.get_current_buffer());
-                                        let result = processor.handle_backspace();
-                                        eprintln!("Backspace result: {:?}", result);
-                                        eprintln!("Buffer after backspace: '{}'", processor.get_current_buffer());
-                                        
-                                        return handle_processing_result(handle, result);
-                                    }
-                                }
-                            }
-                        }
-                        c => {
-                            // Handle regular character input
-                            if c.is_ascii_alphabetic() && !modifiers.is_super() && !modifiers.is_alt() {
-                                if let Ok(mut processor) = INPUT_PROCESSOR.lock() {
-                                    let input_char = if modifiers.is_shift() || modifiers.is_capslock() {
-                                        c.to_ascii_uppercase()
-                                    } else {
-                                        c
-                                    };
-                                    
-                                    eprintln!("Processing key: '{}' (Vietnamese enabled: {})", input_char, vietnamese_enabled);
-                                    let result = processor.process_key(input_char);
-                                    eprintln!("Process result: {:?}", result);
-                                    eprintln!("Current buffer: '{}'", processor.get_current_buffer());
-                                    
-                                    // Handle the processing result properly
-                                    return handle_processing_result(handle, result);
-                                }
-                            } else {
-                                eprintln!("Key '{}' not processed - modifiers: {:?}, is_alphabetic: {}", c, modifiers, c.is_ascii_alphabetic());
-                            }
-                        }
+        // Handle special keys when Vietnamese is enabled
+        if VIETNAMESE_ENABLED.load(Ordering::Relaxed) {
+            if let PressedKey::Char(ch) = key {
+                match ch {
+                    KEY_ESCAPE => {
+                        do_restore_word(handle);
+                        return true;
                     }
+                    KEY_TAB | KEY_ENTER => {
+                        if let Ok(mut processor) = INPUT_PROCESSOR.lock() {
+                            processor.clear_buffer();
+                        }
+                        return false; // Let these keys through
+                    }
+                    _ => {}
                 }
             }
         }
+
+        // Transform regular characters through Vietnamese input method
+        return transform_key(handle, key);
     }
-    
+
     false
 }
