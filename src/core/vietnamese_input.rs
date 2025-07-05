@@ -24,7 +24,7 @@ impl VietnameseInputProcessor {
             input_type,
             should_track: true,
             previous_word: String::new(),
-            max_word_length: 10, // Same as goxkey's MAX_POSSIBLE_WORD_LENGTH
+            max_word_length: 10, // Maximum possible word length
         }
     }
 
@@ -61,7 +61,7 @@ impl VietnameseInputProcessor {
             return ProcessingResult::PassThrough(key);
         }
 
-        // Remove numeric prefix if present (goxkey behavior)
+        // Remove numeric prefix if present
         if let Some(first_char) = self.typing_buffer.chars().next() {
             if first_char.is_numeric() {
                 self.typing_buffer.remove(0);
@@ -102,7 +102,7 @@ impl VietnameseInputProcessor {
         // Update display buffer
         self.display_buffer = result.clone();
 
-        // Check if transformation removed letters or tone marks (goxkey behavior)
+                    // Check if transformation removed letters or tone marks
         if transform_result.letter_modification_removed || transform_result.tone_mark_removed {
             self.stop_tracking();
         }
@@ -168,7 +168,7 @@ impl VietnameseInputProcessor {
     }
 
     fn handle_escape(&mut self) -> ProcessingResult {
-        // Escape should restore the original typed text (goxkey behavior)
+        // Escape should restore the original typed text
         if !self.typing_buffer.is_empty() {
             let original_text = self.typing_buffer.clone();
             let display_length = self.display_buffer.chars().count();

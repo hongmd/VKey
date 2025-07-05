@@ -15,7 +15,7 @@ use core::AppConfig;
 use platform::system_integration;
 use platform::{
     run_event_listener, send_backspace, send_string, CallbackFn, EventTapType, Handle, KeyModifier, PressedKey, KEY_ENTER, KEY_ESCAPE,
-    KEY_TAB,
+    KEY_TAB, initialize_keyboard_layout,
 };
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -225,10 +225,10 @@ fn is_hotkey_match(modifiers: KeyModifier, key: Option<PressedKey>) -> bool {
     })
 }
 
-/// Handle backspace using goxkey-style approach
+/// Handle backspace using advanced approach
 /// This implements the "backspace technique" used by Vietnamese input methods
-fn handle_backspace_goxkey_style(handle: Handle) -> bool {
-    eprintln!("Handling backspace with goxkey-style approach");
+fn handle_backspace_advanced(handle: Handle) -> bool {
+    eprintln!("Handling backspace with advanced approach");
     
     // First check if text is selected in the application
     #[cfg(target_os = "macos")]
@@ -264,7 +264,7 @@ fn handle_backspace_goxkey_style(handle: Handle) -> bool {
         match processor.handle_backspace() {
             ProcessingResult::ProcessedText { text, buffer_length } => {
                 eprintln!("Backspace processed - clearing {} chars, sending: '{}'", buffer_length, text);
-                // Use goxkey-style backspace technique:
+                // Use advanced backspace technique:
                 // 1. Send backspaces to clear the previously displayed text
                 if buffer_length > 0 {
                     let _ = send_backspace(handle, buffer_length);
@@ -323,14 +323,14 @@ fn do_restore_word(handle: Handle) {
     }
 }
 
-/// Transform keys based on Vietnamese input rules with improved goxkey-style handling
+/// Transform keys based on Vietnamese input rules with improved handling
 fn transform_key(handle: Handle, key: PressedKey, modifiers: KeyModifier) -> bool {
     eprintln!("Vietnamese enabled: {}", VIETNAMESE_ENABLED.load(Ordering::Relaxed));
     
     if let PressedKey::Char(character) = key {
-        // Handle backspace with goxkey-style approach
+        // Handle backspace with advanced approach
         if character == '\u{8}' { // Backspace
-            return handle_backspace_goxkey_style(handle);
+            return handle_backspace_advanced(handle);
         }
         
         // Handle special shifted character transformations (always apply, regardless of Vietnamese mode)
@@ -396,7 +396,7 @@ fn transform_key(handle: Handle, key: PressedKey, modifiers: KeyModifier) -> boo
         if let Ok(mut processor) = INPUT_PROCESSOR.lock() {
             match processor.process_key(transformed_character) {
                 ProcessingResult::ProcessedText { text, buffer_length } => {
-                    // Use goxkey-style technique: clear previous text and send new text
+                    // Use advanced technique: clear previous text and send new text
                     eprintln!("Sending Vietnamese text: '{}', clearing {} chars", text, buffer_length);
                     if buffer_length > 0 {
                         let _ = send_backspace(handle, buffer_length);

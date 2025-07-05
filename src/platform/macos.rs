@@ -107,62 +107,64 @@ pub fn get_home_dir() -> Option<PathBuf> {
 
 // List of keycode: https://eastmanreference.com/complete-list-of-applescript-key-codes
 fn get_char(keycode: CGKeyCode) -> Option<PressedKey> {
-    if let Some(key_map) = KEYBOARD_LAYOUT_CHARACTER_MAP.get() {
-        return match keycode {
-            0 => Some(PressedKey::Char(key_map[&'a'])),
-            1 => Some(PressedKey::Char(key_map[&'s'])),
-            2 => Some(PressedKey::Char(key_map[&'d'])),
-            3 => Some(PressedKey::Char(key_map[&'f'])),
-            4 => Some(PressedKey::Char(key_map[&'h'])),
-            5 => Some(PressedKey::Char(key_map[&'g'])),
-            6 => Some(PressedKey::Char(key_map[&'z'])),
-            7 => Some(PressedKey::Char(key_map[&'x'])),
-            8 => Some(PressedKey::Char(key_map[&'c'])),
-            9 => Some(PressedKey::Char(key_map[&'v'])),
-            11 => Some(PressedKey::Char(key_map[&'b'])),
-            12 => Some(PressedKey::Char(key_map[&'q'])),
-            13 => Some(PressedKey::Char(key_map[&'w'])),
-            14 => Some(PressedKey::Char(key_map[&'e'])),
-            15 => Some(PressedKey::Char(key_map[&'r'])),
-            16 => Some(PressedKey::Char(key_map[&'y'])),
-            17 => Some(PressedKey::Char(key_map[&'t'])),
-            31 => Some(PressedKey::Char(key_map[&'o'])),
-            32 => Some(PressedKey::Char(key_map[&'u'])),
-            34 => Some(PressedKey::Char(key_map[&'i'])),
-            35 => Some(PressedKey::Char(key_map[&'p'])),
-            37 => Some(PressedKey::Char(key_map[&'l'])),
-            38 => Some(PressedKey::Char(key_map[&'j'])),
-            40 => Some(PressedKey::Char(key_map[&'k'])),
-            45 => Some(PressedKey::Char(key_map[&'n'])),
-            46 => Some(PressedKey::Char(key_map[&'m'])),
-            18 => Some(PressedKey::Char(key_map[&'1'])),
-            19 => Some(PressedKey::Char(key_map[&'2'])),
-            20 => Some(PressedKey::Char(key_map[&'3'])),
-            21 => Some(PressedKey::Char(key_map[&'4'])),
-            22 => Some(PressedKey::Char(key_map[&'6'])),
-            23 => Some(PressedKey::Char(key_map[&'5'])),
-            25 => Some(PressedKey::Char(key_map[&'9'])),
-            26 => Some(PressedKey::Char(key_map[&'7'])),
-            28 => Some(PressedKey::Char(key_map[&'8'])),
-            29 => Some(PressedKey::Char(key_map[&'0'])),
-            27 => Some(PressedKey::Char(key_map[&'-'])),
-            33 => Some(PressedKey::Char(key_map[&'['])),
-            30 => Some(PressedKey::Char(key_map[&']'])),
-            41 => Some(PressedKey::Char(key_map[&';'])),
-            43 => Some(PressedKey::Char(key_map[&','])),
-            24 => Some(PressedKey::Char(key_map[&'='])),
-            42 => Some(PressedKey::Char(key_map[&'\\'])),
-            44 => Some(PressedKey::Char(key_map[&'/'])),
-            39 => Some(PressedKey::Char(key_map[&'\''])),
-            47 => Some(PressedKey::Char(key_map[&'.'])),
-            50 => Some(PressedKey::Char(key_map[&'`'])),  // backtick/grave accent
-            36 | 52 => Some(PressedKey::Char(KEY_ENTER)), // ENTER
-            49 => Some(PressedKey::Char(KEY_SPACE)),      // SPACE
-            48 => Some(PressedKey::Char(KEY_TAB)),        // TAB
-            51 => Some(PressedKey::Char(KEY_DELETE)),     // DELETE
-            53 => Some(PressedKey::Char(KEY_ESCAPE)),     // ESC
-            _ => Some(PressedKey::Raw(keycode)),
-        };
+    if let Some(key_map_mutex) = KEYBOARD_LAYOUT_CHARACTER_MAP.get() {
+        if let Ok(key_map) = key_map_mutex.lock() {
+            return match keycode {
+                0 => Some(PressedKey::Char(key_map.get(&'a').copied().unwrap_or('a'))),
+                1 => Some(PressedKey::Char(key_map.get(&'s').copied().unwrap_or('s'))),
+                2 => Some(PressedKey::Char(key_map.get(&'d').copied().unwrap_or('d'))),
+                3 => Some(PressedKey::Char(key_map.get(&'f').copied().unwrap_or('f'))),
+                4 => Some(PressedKey::Char(key_map.get(&'h').copied().unwrap_or('h'))),
+                5 => Some(PressedKey::Char(key_map.get(&'g').copied().unwrap_or('g'))),
+                6 => Some(PressedKey::Char(key_map.get(&'z').copied().unwrap_or('z'))),
+                7 => Some(PressedKey::Char(key_map.get(&'x').copied().unwrap_or('x'))),
+                8 => Some(PressedKey::Char(key_map.get(&'c').copied().unwrap_or('c'))),
+                9 => Some(PressedKey::Char(key_map.get(&'v').copied().unwrap_or('v'))),
+                11 => Some(PressedKey::Char(key_map.get(&'b').copied().unwrap_or('b'))),
+                12 => Some(PressedKey::Char(key_map.get(&'q').copied().unwrap_or('q'))),
+                13 => Some(PressedKey::Char(key_map.get(&'w').copied().unwrap_or('w'))),
+                14 => Some(PressedKey::Char(key_map.get(&'e').copied().unwrap_or('e'))),
+                15 => Some(PressedKey::Char(key_map.get(&'r').copied().unwrap_or('r'))),
+                16 => Some(PressedKey::Char(key_map.get(&'y').copied().unwrap_or('y'))),
+                17 => Some(PressedKey::Char(key_map.get(&'t').copied().unwrap_or('t'))),
+                31 => Some(PressedKey::Char(key_map.get(&'o').copied().unwrap_or('o'))),
+                32 => Some(PressedKey::Char(key_map.get(&'u').copied().unwrap_or('u'))),
+                34 => Some(PressedKey::Char(key_map.get(&'i').copied().unwrap_or('i'))),
+                35 => Some(PressedKey::Char(key_map.get(&'p').copied().unwrap_or('p'))),
+                37 => Some(PressedKey::Char(key_map.get(&'l').copied().unwrap_or('l'))),
+                38 => Some(PressedKey::Char(key_map.get(&'j').copied().unwrap_or('j'))),
+                40 => Some(PressedKey::Char(key_map.get(&'k').copied().unwrap_or('k'))),
+                45 => Some(PressedKey::Char(key_map.get(&'n').copied().unwrap_or('n'))),
+                46 => Some(PressedKey::Char(key_map.get(&'m').copied().unwrap_or('m'))),
+                18 => Some(PressedKey::Char(key_map.get(&'1').copied().unwrap_or('1'))),
+                19 => Some(PressedKey::Char(key_map.get(&'2').copied().unwrap_or('2'))),
+                20 => Some(PressedKey::Char(key_map.get(&'3').copied().unwrap_or('3'))),
+                21 => Some(PressedKey::Char(key_map.get(&'4').copied().unwrap_or('4'))),
+                22 => Some(PressedKey::Char(key_map.get(&'6').copied().unwrap_or('6'))),
+                23 => Some(PressedKey::Char(key_map.get(&'5').copied().unwrap_or('5'))),
+                25 => Some(PressedKey::Char(key_map.get(&'9').copied().unwrap_or('9'))),
+                26 => Some(PressedKey::Char(key_map.get(&'7').copied().unwrap_or('7'))),
+                28 => Some(PressedKey::Char(key_map.get(&'8').copied().unwrap_or('8'))),
+                29 => Some(PressedKey::Char(key_map.get(&'0').copied().unwrap_or('0'))),
+                27 => Some(PressedKey::Char(key_map.get(&'-').copied().unwrap_or('-'))),
+                33 => Some(PressedKey::Char(key_map.get(&'[').copied().unwrap_or('['))),
+                30 => Some(PressedKey::Char(key_map.get(&']').copied().unwrap_or(']'))),
+                41 => Some(PressedKey::Char(key_map.get(&';').copied().unwrap_or(';'))),
+                43 => Some(PressedKey::Char(key_map.get(&',').copied().unwrap_or(','))),
+                24 => Some(PressedKey::Char(key_map.get(&'=').copied().unwrap_or('='))),
+                42 => Some(PressedKey::Char(key_map.get(&'\\').copied().unwrap_or('\\'))),
+                44 => Some(PressedKey::Char(key_map.get(&'/').copied().unwrap_or('/'))),
+                39 => Some(PressedKey::Char(key_map.get(&'\'').copied().unwrap_or('\''))),
+                47 => Some(PressedKey::Char(key_map.get(&'.').copied().unwrap_or('.'))),
+                50 => Some(PressedKey::Char(key_map.get(&'`').copied().unwrap_or('`'))),  // backtick/grave accent
+                36 | 52 => Some(PressedKey::Char(KEY_ENTER)), // ENTER
+                49 => Some(PressedKey::Char(KEY_SPACE)),      // SPACE
+                48 => Some(PressedKey::Char(KEY_TAB)),        // TAB
+                51 => Some(PressedKey::Char(KEY_DELETE)),     // DELETE
+                53 => Some(PressedKey::Char(KEY_ESCAPE)),     // ESC
+                _ => Some(PressedKey::Raw(keycode)),
+            };
+        }
     }
     None
 }

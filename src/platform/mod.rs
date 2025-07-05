@@ -6,6 +6,9 @@ use core_graphics::event::{CGEventTapProxy};
 use std::collections::HashMap;
 use once_cell::sync::OnceCell;
 use bitflags::bitflags;
+use rdev::{Keyboard, KeyboardState};
+use log::debug;
+use std::sync::Mutex;
 
 // Platform type definitions
 pub type CallbackFn = Box<dyn Fn(CGEventTapProxy, EventTapType, Option<PressedKey>, KeyModifier) -> bool>;
@@ -24,7 +27,6 @@ pub enum PressedKey {
 }
 
 bitflags! {
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct KeyModifier: u32 {
         const MODIFIER_NONE     = 0b00000000;
         const MODIFIER_SHIFT    = 0b00000001;
@@ -88,66 +90,120 @@ pub const KEY_TAB: char = '\t';
 pub const KEY_DELETE: char = '\u{0008}'; // Backspace
 pub const KEY_ESCAPE: char = '\u{001B}';
 
-// Keyboard layout character mapping
-pub static KEYBOARD_LAYOUT_CHARACTER_MAP: OnceCell<HashMap<char, char>> = OnceCell::new();
+// Predefined character set for keyboard layout detection
+pub const PREDEFINED_CHARS: [char; 47] = [
+    'a', '`', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 'q', 'w', 'e', 'r', 't',
+    'y', 'u', 'i', 'o', 'p', '[', ']', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '\\',
+    'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/',
+];
 
+// Keyboard layout character mapping
+pub static KEYBOARD_LAYOUT_CHARACTER_MAP: OnceCell<Mutex<HashMap<char, char>>> = OnceCell::new();
+
+/// Convert character to rdev::Key
+pub fn get_key_from_char(c: char) -> rdev::Key {
+    use rdev::Key::*;
+    match &c {
+        'a' => KeyA,
+        '`' => BackQuote,
+        '1' => Num1,
+        '2' => Num2,
+        '3' => Num3,
+        '4' => Num4,
+        '5' => Num5,
+        '6' => Num6,
+        '7' => Num7,
+        '8' => Num8,
+        '9' => Num9,
+        '0' => Num0,
+        '-' => Minus,
+        '=' => Equal,
+        'q' => KeyQ,
+        'w' => KeyW,
+        'e' => KeyE,
+        'r' => KeyR,
+        't' => KeyT,
+        'y' => KeyY,
+        'u' => KeyU,
+        'i' => KeyI,
+        'o' => KeyO,
+        'p' => KeyP,
+        '[' => LeftBracket,
+        ']' => RightBracket,
+        's' => KeyS,
+        'd' => KeyD,
+        'f' => KeyF,
+        'g' => KeyG,
+        'h' => KeyH,
+        'j' => KeyJ,
+        'k' => KeyK,
+        'l' => KeyL,
+        ';' => SemiColon,
+        '\'' => Quote,
+        '\\' => BackSlash,
+        'z' => KeyZ,
+        'x' => KeyX,
+        'c' => KeyC,
+        'v' => KeyV,
+        'b' => KeyB,
+        'n' => KeyN,
+        'm' => KeyM,
+        ',' => Comma,
+        '.' => Dot,
+        '/' => Slash,
+        _ => Unknown(0),
+    }
+}
+
+/// Build keyboard layout map using rdev
+fn build_keyboard_layout_map(map: &mut HashMap<char, char>) {
+    map.clear();
+    if let Some(mut kb) = Keyboard::new() {
+        for c in PREDEFINED_CHARS {
+            let key = rdev::EventType::KeyPress(get_key_from_char(c));
+            if let Some(s) = kb.add(&key) {
+                if let Some(ch) = s.chars().last() {
+                    map.insert(c, ch);
+                }
+            }
+        }
+        debug!("Built keyboard layout map with {} entries", map.len());
+    } else {
+        debug!("Failed to create rdev::Keyboard, falling back to static mapping");
+        // Fallback to static mapping if rdev fails
+        for c in PREDEFINED_CHARS {
+            map.insert(c, c);
+        }
+    }
+}
+
+/// Initialize keyboard layout using rdev
 pub fn initialize_keyboard_layout() {
     let mut map = HashMap::new();
-    
-    // Standard QWERTY layout mapping
-    map.insert('a', 'a');
-    map.insert('s', 's');
-    map.insert('d', 'd');
-    map.insert('f', 'f');
-    map.insert('g', 'g');
-    map.insert('h', 'h');
-    map.insert('j', 'j');
-    map.insert('k', 'k');
-    map.insert('l', 'l');
-    map.insert('z', 'z');
-    map.insert('x', 'x');
-    map.insert('c', 'c');
-    map.insert('v', 'v');
-    map.insert('b', 'b');
-    map.insert('n', 'n');
-    map.insert('m', 'm');
-    map.insert('q', 'q');
-    map.insert('w', 'w');
-    map.insert('e', 'e');
-    map.insert('r', 'r');
-    map.insert('t', 't');
-    map.insert('y', 'y');
-    map.insert('u', 'u');
-    map.insert('i', 'i');
-    map.insert('o', 'o');
-    map.insert('p', 'p');
-    
-    // Numbers
-    map.insert('1', '1');
-    map.insert('2', '2');
-    map.insert('3', '3');
-    map.insert('4', '4');
-    map.insert('5', '5');
-    map.insert('6', '6');
-    map.insert('7', '7');
-    map.insert('8', '8');
-    map.insert('9', '9');
-    map.insert('0', '0');
-    
-    // Symbols
-    map.insert('-', '-');
-    map.insert('=', '=');
-    map.insert('[', '[');
-    map.insert(']', ']');
-    map.insert('\\', '\\');
-    map.insert(';', ';');
-    map.insert('\'', '\'');
-    map.insert(',', ',');
-    map.insert('.', '.');
-    map.insert('/', '/');
-    map.insert('`', '`'); // backtick/grave accent
-    
-    KEYBOARD_LAYOUT_CHARACTER_MAP.set(map).unwrap();
+    build_keyboard_layout_map(&mut map);
+    if let Err(_) = KEYBOARD_LAYOUT_CHARACTER_MAP.set(Mutex::new(map)) {
+        debug!("Keyboard layout map already initialized");
+    } else {
+        debug!("Keyboard layout map initialized successfully");
+    }
+}
+
+/// Rebuild keyboard layout map when layout changes
+pub fn rebuild_keyboard_layout_map() {
+    // Get mutable reference to existing map if it exists
+    if let Some(mutex) = KEYBOARD_LAYOUT_CHARACTER_MAP.get() {
+        if let Ok(mut map) = mutex.lock() {
+            debug!("Rebuilding keyboard layout map...");
+            build_keyboard_layout_map(&mut map);
+            debug!("Keyboard layout map rebuilt");
+        } else {
+            debug!("Failed to lock keyboard layout map mutex");
+        }
+    } else {
+        debug!("Creating new keyboard layout map...");
+        initialize_keyboard_layout();
+        debug!("New keyboard layout map created");
+    }
 }
 
 // MacOS keyboard handler

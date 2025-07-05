@@ -195,6 +195,9 @@ impl VKeyApp {
         self.config.input_type = input_type;
         self.vietnamese_processor.set_input_type(input_type);
         
+        // Rebuild keyboard layout when input type changes
+        crate::platform::rebuild_keyboard_layout_map();
+        
         // Save configuration
         if let Err(e) = self.config.update_and_save() {
             eprintln!("Failed to save config after input type change: {}", e);
@@ -226,6 +229,9 @@ impl VKeyApp {
             Ok(_) => {
                 // Update processor and handler with new settings
                 self.vietnamese_processor.set_input_type(self.config.input_type);
+                
+                // Rebuild keyboard layout when configuration is reset
+                crate::platform::rebuild_keyboard_layout_map();
                 
                 #[cfg(target_os = "macos")]
                 {
@@ -349,12 +355,16 @@ impl VKeyApp {
             // Switch to Telex input method
             system_tray.set_menu_item_callback(SystemTrayMenuItemKey::TypingMethodTelex, || {
                 println!("System tray: Switch to Telex");
+                // Rebuild keyboard layout when input type changes
+                crate::platform::rebuild_keyboard_layout_map();
                 crate::send_system_tray_event(crate::SystemTrayEvent::SetInputTypeTelex);
             });
 
             // Switch to VNI input method
             system_tray.set_menu_item_callback(SystemTrayMenuItemKey::TypingMethodVNI, || {
                 println!("System tray: Switch to VNI");
+                // Rebuild keyboard layout when input type changes
+                crate::platform::rebuild_keyboard_layout_map();
                 crate::send_system_tray_event(crate::SystemTrayEvent::SetInputTypeVNI);
             });
 
