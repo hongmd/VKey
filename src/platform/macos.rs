@@ -155,6 +155,7 @@ fn get_char(keycode: CGKeyCode) -> Option<PressedKey> {
             44 => Some(PressedKey::Char(key_map[&'/'])),
             39 => Some(PressedKey::Char(key_map[&'\''])),
             47 => Some(PressedKey::Char(key_map[&'.'])),
+            50 => Some(PressedKey::Char(key_map[&'`'])),  // backtick/grave accent
             36 | 52 => Some(PressedKey::Char(KEY_ENTER)), // ENTER
             49 => Some(PressedKey::Char(KEY_SPACE)),      // SPACE
             48 => Some(PressedKey::Char(KEY_TAB)),        // TAB
@@ -166,28 +167,38 @@ fn get_char(keycode: CGKeyCode) -> Option<PressedKey> {
     None
 }
 
+/// Check if text is currently selected in the active application
+/// This is used to handle backspace properly when text is selected
 pub fn is_in_text_selection() -> bool {
+    // Use the higher-level accessibility crate for better safety
     let system_element = AXUIElement::system_wide();
-    let Some(selected_element) = system_element
+    
+    let focused_element = match system_element
         .attribute(&AXAttribute::new(&CFString::from_static_string(
             kAXFocusedUIElementAttribute,
-        )))
-        .map(|elemenet| elemenet.downcast_into::<AXUIElement>())
-        .ok()
-        .flatten()
-    else {
-        return false;
+        ))) {
+        Ok(element) => {
+            match element.downcast_into::<AXUIElement>() {
+                Some(element) => element,
+                None => return false,
+            }
+        }
+        _ => return false,
     };
-    let Some(selected_text) = selected_element
+    
+    let selected_text = match focused_element
         .attribute(&AXAttribute::new(&CFString::from_static_string(
             kAXSelectedTextAttribute,
-        )))
-        .map(|text| text.downcast_into::<CFString>())
-        .ok()
-        .flatten()
-    else {
-        return false;
+        ))) {
+        Ok(text) => {
+            match text.downcast_into::<CFString>() {
+                Some(text) => text,
+                None => return false,
+            }
+        }
+        _ => return false,
     };
+    
     !selected_text.to_string().is_empty()
 }
 

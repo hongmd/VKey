@@ -225,36 +225,179 @@ fn is_hotkey_match(modifiers: KeyModifier, key: Option<PressedKey>) -> bool {
     })
 }
 
+/// Handle backspace using goxkey-style approach
+/// This implements the "backspace technique" used by Vietnamese input methods
+fn handle_backspace_goxkey_style(handle: Handle) -> bool {
+    eprintln!("Handling backspace with goxkey-style approach");
+    
+    // First check if text is selected in the application
+    #[cfg(target_os = "macos")]
+    let has_text_selection = {
+        use platform::is_in_text_selection;
+        is_in_text_selection()
+    };
+    #[cfg(not(target_os = "macos"))]
+    let has_text_selection = false;
+    
+    if has_text_selection {
+        eprintln!("Text selection detected - clearing buffer and letting backspace pass through");
+        // Clear our internal buffer since the user is deleting selected text
+        if let Ok(mut processor) = INPUT_PROCESSOR.lock() {
+            processor.clear_buffer();
+        }
+        // Let the system handle the deletion of selected text
+        return false;
+    }
+    
+    // If Vietnamese input is not enabled, let backspace pass through normally
+    if !VIETNAMESE_ENABLED.load(Ordering::Relaxed) {
+        eprintln!("Vietnamese not enabled - letting backspace pass through");
+        return false;
+    }
+    
+    // Handle Vietnamese input backspace
+    if let Ok(mut processor) = INPUT_PROCESSOR.lock() {
+        let buffer_before = processor.get_current_buffer().to_string();
+        eprintln!("Current buffer before backspace: '{}'", buffer_before);
+        
+        // Process backspace through Vietnamese processor
+        match processor.handle_backspace() {
+            ProcessingResult::ProcessedText { text, buffer_length } => {
+                eprintln!("Backspace processed - clearing {} chars, sending: '{}'", buffer_length, text);
+                // Use goxkey-style backspace technique:
+                // 1. Send backspaces to clear the previously displayed text
+                if buffer_length > 0 {
+                    let _ = send_backspace(handle, buffer_length);
+                }
+                // 2. Send the new transformed text
+                if !text.is_empty() {
+                    let _ = send_string(handle, &text);
+                }
+                return true; // Block the original backspace
+            }
+            ProcessingResult::ClearAndPassBackspace => {
+                eprintln!("Buffer cleared - letting backspace pass through");
+                // Buffer is now empty, let the backspace pass through to delete 
+                // the character before our Vietnamese input started
+                return false;
+            }
+            ProcessingResult::PassThrough(_) => {
+                eprintln!("Backspace passed through");
+                // Let backspace pass through
+                return false;
+            }
+            ProcessingResult::RestoreText { text, buffer_length } => {
+                eprintln!("Restoring text: '{}', clearing {} chars", text, buffer_length);
+                // Clear the current displayed text and send the original text
+                if buffer_length > 0 {
+                    let _ = send_backspace(handle, buffer_length);
+                }
+                if !text.is_empty() {
+                    let _ = send_string(handle, &text);
+                }
+                return true;
+            }
+        }
+    }
+    
+    // Fallback: let backspace pass through
+    eprintln!("Fallback - letting backspace pass through");
+    false
+}
+
 /// Restore the original word by sending backspaces and the original text
 fn do_restore_word(handle: Handle) {
     if let Ok(processor) = INPUT_PROCESSOR.lock() {
-        let buffer = processor.get_current_buffer();
-        if !buffer.is_empty() {
+        let original_text = processor.get_restore_text();
+        let display_length = processor.get_display_buffer().chars().count();
+        
+        if !original_text.is_empty() {
+            eprintln!("Restoring word: '{}', clearing {} chars", original_text, display_length);
             // Send backspaces to clear the processed text
-            let _ = send_backspace(handle, buffer.chars().count());
+            if display_length > 0 {
+                let _ = send_backspace(handle, display_length);
+            }
             // Send the original buffer back
-            let _ = send_string(handle, buffer);
+            let _ = send_string(handle, &original_text);
         }
     }
 }
 
-/// Transform keys based on Vietnamese input rules
+/// Transform keys based on Vietnamese input rules with improved goxkey-style handling
 fn transform_key(handle: Handle, key: PressedKey, modifiers: KeyModifier) -> bool {
     eprintln!("Vietnamese enabled: {}", VIETNAMESE_ENABLED.load(Ordering::Relaxed));
-    if !VIETNAMESE_ENABLED.load(Ordering::Relaxed) {
-        return false; // Don't process if Vietnamese input is disabled
-    }
-
-    if let PressedKey::Char(mut character) = key {
-        // Apply case conversion based on Shift key
-        if modifiers.is_shift() && character.is_ascii_lowercase() {
-            character = character.to_ascii_uppercase();
+    
+    if let PressedKey::Char(character) = key {
+        // Handle backspace with goxkey-style approach
+        if character == '\u{8}' { // Backspace
+            return handle_backspace_goxkey_style(handle);
         }
         
+        // Handle special shifted character transformations (always apply, regardless of Vietnamese mode)
+        let mut transformed_character = character;
+        if modifiers.is_shift() {
+            transformed_character = match character {
+                // Handle Shift+. => >
+                '.' => '>',
+                // Handle other shifted characters
+                ',' => '<',
+                ';' => ':',
+                '\'' => '"',
+                '[' => '{',
+                ']' => '}',
+                '\\' => '|',
+                '/' => '?',
+                '1' => '!',
+                '2' => '@',
+                '3' => '#',
+                '4' => '$',
+                '5' => '%',
+                '6' => '^',
+                '7' => '&',
+                '8' => '*',
+                '9' => '(',
+                '0' => ')',
+                '-' => '_',
+                '=' => '+',
+                '`' => '~',
+                // Apply case conversion for letters
+                c if c.is_ascii_lowercase() => c.to_ascii_uppercase(),
+                // Keep other characters as is
+                c => c,
+            };
+        }
+        
+        // If the character was transformed and Vietnamese is not enabled, send the transformed character
+        if transformed_character != character && !VIETNAMESE_ENABLED.load(Ordering::Relaxed) {
+            let _ = send_string(handle, &transformed_character.to_string());
+            return true; // Block original key and send transformed character
+        }
+        
+        // If Vietnamese is not enabled, let the original character through
+        if !VIETNAMESE_ENABLED.load(Ordering::Relaxed) {
+            return false;
+        }
+        
+        // Before processing Vietnamese input, check if there's text selection
+        // If there is, we should clear our buffer and let the character replace the selection
+        #[cfg(target_os = "macos")]
+        {
+            use platform::is_in_text_selection;
+            if is_in_text_selection() {
+                eprintln!("Text selection detected for character input - clearing buffer");
+                if let Ok(mut processor) = INPUT_PROCESSOR.lock() {
+                    processor.clear_buffer();
+                }
+                // Continue with Vietnamese processing but with cleared buffer
+            }
+        }
+        
+        // Vietnamese input processing
         if let Ok(mut processor) = INPUT_PROCESSOR.lock() {
-            match processor.process_key(character) {
+            match processor.process_key(transformed_character) {
                 ProcessingResult::ProcessedText { text, buffer_length } => {
-                    // Clear previous text and send new text
+                    // Use goxkey-style technique: clear previous text and send new text
+                    eprintln!("Sending Vietnamese text: '{}', clearing {} chars", text, buffer_length);
                     if buffer_length > 0 {
                         let _ = send_backspace(handle, buffer_length);
                     }
@@ -263,15 +406,24 @@ fn transform_key(handle: Handle, key: PressedKey, modifiers: KeyModifier) -> boo
                 }
                 ProcessingResult::PassThrough(_) => {
                     // Let the original character through
+                    eprintln!("Vietnamese processor passed character through");
                     return false;
                 }
                 ProcessingResult::ClearAndPassBackspace => {
                     // Clear buffer and let backspace through
+                    eprintln!("Vietnamese processor cleared buffer for backspace");
                     return false;
                 }
-                ProcessingResult::CommitAndPassThrough(_) => {
-                    // Commit current buffer and let character through
-                    return false;
+                ProcessingResult::RestoreText { text, buffer_length } => {
+                    // Restore original text (typically for Escape key)
+                    eprintln!("Vietnamese processor restoring text: '{}', clearing {} chars", text, buffer_length);
+                    if buffer_length > 0 {
+                        let _ = send_backspace(handle, buffer_length);
+                    }
+                    if !text.is_empty() {
+                        let _ = send_string(handle, &text);
+                    }
+                    return true;
                 }
             }
         }
@@ -307,22 +459,63 @@ fn event_handler(
             return true; // Block the hotkey from reaching other applications
         }
 
+        // Handle Cmd key combinations - let them pass through
+        if modifiers.is_super() {
+            eprintln!("Cmd key combination detected, letting it pass through");
+            // Clear Vietnamese buffer when Cmd is used (user is probably switching apps or using shortcuts)
+            if let Ok(mut processor) = INPUT_PROCESSOR.lock() {
+                processor.new_word();
+            }
+            return false; // Don't block Cmd key combinations
+        }
+
         // Handle special keys when Vietnamese is enabled
         if VIETNAMESE_ENABLED.load(Ordering::Relaxed) {
             if let PressedKey::Char(ch) = key {
                 match ch {
                     KEY_ESCAPE => {
-                        do_restore_word(handle);
-                        return true;
+                        // Escape key handling is now integrated into the Vietnamese processor
+                        return transform_key(handle, key, modifiers);
                     }
                     KEY_TAB | KEY_ENTER => {
-                        if let Ok(mut processor) = INPUT_PROCESSOR.lock() {
-                            processor.clear_buffer();
-                        }
-                        return false; // Let these keys through
+                        // Tab and Enter handling is now integrated into the Vietnamese processor
+                        return transform_key(handle, key, modifiers);
                     }
-                    _ => {}
+                    '\u{8}' => { // Backspace
+                        // Backspace handling is done in transform_key function
+                        return transform_key(handle, key, modifiers);
+                    }
+                    _ => {
+                        // Handle other modifier combinations that should reset the buffer
+                        if modifiers.is_alt() || modifiers.is_control() {
+                            if let Ok(mut processor) = INPUT_PROCESSOR.lock() {
+                                processor.new_word();
+                            }
+                            return false; // Let these combinations pass through
+                        }
+                    }
                 }
+            }
+        }
+
+        // Handle raw key events (arrow keys, etc.)
+        if let PressedKey::Raw(raw_keycode) = key {
+            if raw_keycode == RAW_KEY_GLOBE {
+                toggle_vietnamese();
+                return true;
+            }
+            
+            // Arrow keys should reset the Vietnamese buffer
+            const RAW_ARROW_UP: u16 = 0x7e;
+            const RAW_ARROW_DOWN: u16 = 0x7d;
+            const RAW_ARROW_LEFT: u16 = 0x7b;
+            const RAW_ARROW_RIGHT: u16 = 0x7c;
+            
+            if [RAW_ARROW_UP, RAW_ARROW_DOWN, RAW_ARROW_LEFT, RAW_ARROW_RIGHT].contains(&raw_keycode) {
+                if let Ok(mut processor) = INPUT_PROCESSOR.lock() {
+                    processor.new_word();
+                }
+                return false; // Let arrow keys pass through
             }
         }
 

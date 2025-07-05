@@ -145,6 +145,7 @@ pub fn initialize_keyboard_layout() {
     map.insert(',', ',');
     map.insert('.', '.');
     map.insert('/', '/');
+    map.insert('`', '`'); // backtick/grave accent
     
     KEYBOARD_LAYOUT_CHARACTER_MAP.set(map).unwrap();
 }

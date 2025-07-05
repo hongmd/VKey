@@ -141,10 +141,9 @@ impl VKeyApp {
                 self.input_text.clear();
                 "\u{8}".to_string()
             }
-            ProcessingResult::CommitAndPassThrough(ch) => {
-                self.vietnamese_processor.clear_buffer();
-                self.input_text.push(ch);
-                ch.to_string()
+            ProcessingResult::RestoreText { text, .. } => {
+                self.input_text = text.clone();
+                text
             }
         }
     }
@@ -256,6 +255,17 @@ impl VKeyApp {
         self.vietnamese_processor.get_current_buffer().to_string()
     }
 
+    /// Get current display buffer for showing transformed text
+    pub fn get_current_display_buffer(&self) -> String {
+        #[cfg(target_os = "macos")]
+        if let Some(ref handler) = self.keyboard_handler {
+            // If handler has display buffer method, use it
+            return handler.get_current_buffer();
+        }
+        
+        self.vietnamese_processor.get_display_buffer().to_string()
+    }
+
     /// Clear the input buffer
     pub fn clear_input_buffer(&mut self) {
         self.vietnamese_processor.clear_buffer();
@@ -263,6 +273,27 @@ impl VKeyApp {
         
         #[cfg(target_os = "macos")]
         if let Some(ref mut handler) = self.keyboard_handler {
+            handler.clear_buffer();
+        }
+    }
+
+    /// Get the previous word for restoration
+    pub fn get_previous_word(&self) -> String {
+        self.vietnamese_processor.get_previous_word().to_string()
+    }
+
+    /// Check if the processor is currently tracking input
+    pub fn is_tracking_input(&self) -> bool {
+        self.vietnamese_processor.is_tracking()
+    }
+
+    /// Start a new word (reset buffers and enable tracking)
+    pub fn start_new_word(&mut self) {
+        self.vietnamese_processor.new_word();
+        
+        #[cfg(target_os = "macos")]
+        if let Some(ref mut handler) = self.keyboard_handler {
+            // If handler has new_word method, call it
             handler.clear_buffer();
         }
     }
