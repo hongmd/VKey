@@ -281,7 +281,12 @@ pub mod macos;
 pub mod macos_ext;
 
 #[cfg(target_os = "macos")]
-pub use macos::*;
+pub use macos::{
+    add_app_change_callback, ensure_accessibility_permission, get_active_app_name, get_home_dir,
+    is_in_text_selection, is_launch_on_login, run_event_listener, send_backspace, send_string,
+    update_launch_on_login, Handle, SYMBOL_ALT, SYMBOL_CTRL, SYMBOL_SHIFT, SYMBOL_SUPER,
+    should_dismiss_selection_if_needed, dismiss_text_selection_if_needed,
+};
 
 #[cfg(target_os = "macos")]
 pub use macos_ext::{SystemTray, SystemTrayMenuItemKey}; 

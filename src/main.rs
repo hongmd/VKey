@@ -15,7 +15,7 @@ use core::AppConfig;
 use platform::system_integration;
 use platform::{
     run_event_listener, send_backspace, send_string, CallbackFn, EventTapType, Handle, KeyModifier, PressedKey, KEY_ENTER, KEY_ESCAPE,
-    KEY_TAB, initialize_keyboard_layout,
+    KEY_TAB, initialize_keyboard_layout, should_dismiss_selection_if_needed, dismiss_text_selection_if_needed,
 };
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -264,12 +264,16 @@ fn handle_backspace_advanced(handle: Handle) -> bool {
         match processor.handle_backspace() {
             ProcessingResult::ProcessedText { text, buffer_length } => {
                 eprintln!("Backspace processed - clearing {} chars, sending: '{}'", buffer_length, text);
-                // Use advanced backspace technique:
-                // 1. Send backspaces to clear the previously displayed text
+                
+                // Firefox/Chrome workaround: dismiss text selection if needed
+                let _ = dismiss_text_selection_if_needed(handle);
+                
+                // Send backspaces first with proper timing
                 if buffer_length > 0 {
                     let _ = send_backspace(handle, buffer_length);
                 }
-                // 2. Send the new transformed text
+                
+                // Then send the new transformed text
                 if !text.is_empty() {
                     let _ = send_string(handle, &text);
                 }
@@ -313,11 +317,16 @@ fn do_restore_word(handle: Handle) {
         
         if !original_text.is_empty() {
             eprintln!("Restoring word: '{}', clearing {} chars", original_text, display_length);
-            // Send backspaces to clear the processed text
+            
+            // Firefox/Chrome workaround: dismiss text selection if needed
+            let _ = dismiss_text_selection_if_needed(handle);
+            
+            // Send backspaces first with proper timing
             if display_length > 0 {
                 let _ = send_backspace(handle, display_length);
             }
-            // Send the original buffer back
+            
+            // Then send the original buffer back
             let _ = send_string(handle, &original_text);
         }
     }
@@ -396,11 +405,18 @@ fn transform_key(handle: Handle, key: PressedKey, modifiers: KeyModifier) -> boo
         if let Ok(mut processor) = INPUT_PROCESSOR.lock() {
             match processor.process_key(transformed_character) {
                 ProcessingResult::ProcessedText { text, buffer_length } => {
-                    // Use advanced technique: clear previous text and send new text
+                    // Implement anti-flashing technique
                     eprintln!("Sending Vietnamese text: '{}', clearing {} chars", text, buffer_length);
+                    
+                    // Firefox/Chrome workaround: dismiss text selection if needed
+                    let _ = dismiss_text_selection_if_needed(handle);
+                    
+                    // Send backspaces first with proper timing
                     if buffer_length > 0 {
                         let _ = send_backspace(handle, buffer_length);
                     }
+                    
+                    // Then send the new text
                     let _ = send_string(handle, &text);
                     return true; // Block original key
                 }
@@ -417,6 +433,7 @@ fn transform_key(handle: Handle, key: PressedKey, modifiers: KeyModifier) -> boo
                 ProcessingResult::RestoreText { text, buffer_length } => {
                     // Restore original text (typically for Escape key)
                     eprintln!("Vietnamese processor restoring text: '{}', clearing {} chars", text, buffer_length);
+                    
                     if buffer_length > 0 {
                         let _ = send_backspace(handle, buffer_length);
                     }

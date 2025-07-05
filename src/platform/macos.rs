@@ -205,32 +205,66 @@ pub fn is_in_text_selection() -> bool {
 }
 
 pub fn send_backspace(handle: Handle, count: usize) -> Result<(), ()> {
+    if count == 0 {
+        return Ok(());
+    }
+    
     let null_event_source = ptr::null_mut() as *mut sys::CGEventSource;
+    
+    // Create backspace events once and reuse them
     let (event_bs_down, event_bs_up) = unsafe {
         (
             CGEventCreateKeyboardEvent(null_event_source, KeyCode::DELETE, true),
             CGEventCreateKeyboardEvent(null_event_source, KeyCode::DELETE, false),
         )
     };
+    
+    // Send backspaces with proper timing to prevent flashing
     for _ in 0..count {
         unsafe {
             CGEventTapPostEvent(handle, event_bs_down);
             CGEventTapPostEvent(handle, event_bs_up);
         }
     }
+    
+    // Small delay to ensure backspaces are processed before text
+    // This prevents the flashing effect
+    std::thread::sleep(std::time::Duration::from_micros(100));
+    
     Ok(())
 }
 
 pub fn send_string(handle: Handle, string: &str) -> Result<(), ()> {
+    if string.is_empty() {
+        return Ok(());
+    }
+    
     let utf_16_str: Vec<u16> = string.encode_utf16().collect();
     let null_event_source = ptr::null_mut() as *mut sys::CGEventSource;
 
     unsafe {
+        // Create single text event with all characters
         let event_str = CGEventCreateKeyboardEvent(null_event_source, 0, true);
         let buflen = utf_16_str.len() as libc::c_ulong;
         let bufptr = utf_16_str.as_ptr();
         CGEventKeyboardSetUnicodeString(event_str, buflen, bufptr);
         CGEventTapPostEvent(handle, event_str);
+    }
+    Ok(())
+}
+
+/// Check if we should dismiss text selection
+pub fn should_dismiss_selection_if_needed() -> bool {
+    let app_name = get_active_app_name();
+    app_name.contains("Firefox") || app_name.contains("Chrome")
+}
+
+/// Dismiss text selection by sending space and backspace
+pub fn dismiss_text_selection_if_needed(handle: Handle) -> Result<(), ()> {
+    if should_dismiss_selection_if_needed() && is_in_text_selection() {
+        // Send space and immediately delete it to dismiss selection
+        let _ = send_string(handle, " ");
+        let _ = send_backspace(handle, 1);
     }
     Ok(())
 }
