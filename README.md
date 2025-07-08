@@ -244,7 +244,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-- **[vi-rs](https://github.com/fetus-hina/vi-rs)** for the Vietnamese input processing library
+- **[vi-rs](https://github.com/zerox-dg/vi-rs)** for the Vietnamese input processing library
 - **[Zed](https://github.com/zed-industries/zed)** for the GPUI framework
 - The Vietnamese input method community for input method specifications
 - All contributors who help improve VKey
