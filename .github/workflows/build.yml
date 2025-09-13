@@ -32,6 +32,14 @@ jobs:
         shell: bash
         continue-on-error: false
 
+      - name: Run tests
+        run: cargo test
+        continue-on-error: false
+
+      - name: Run clippy
+        run: cargo clippy -- -D warnings
+        continue-on-error: false
+
       - name: Install cargo-bundle
         run: cargo install cargo-bundle
         continue-on-error: false
