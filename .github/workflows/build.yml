@@ -1,29 +1,46 @@
 name: Build and Package VKey App
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  # push:
+  #   branches: [ main ]
+  # pull_request:
+  #   branches: [ main ]
+  workflow_dispatch:
 jobs:
   build-macos:
-    runs-on: macos-latest
+    runs-on: macos-15
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        continue-on-error: false
+
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v4
+        continue-on-error: false
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
       - name: Install Rust via rustup
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
         shell: bash
+        continue-on-error: false
 
       - name: Install cargo-bundle
         run: cargo install cargo-bundle
+        continue-on-error: false
 
       - name: Build (release) and create .app bundle
         run: |
           # cargo-bundle will build in release mode and create the .app inside target/release/bundle/osx
           cargo bundle --release --format osx
+        continue-on-error: false
 
       - name: Zip the .app bundle (preserve macOS metadata)
         run: |
@@ -35,9 +52,11 @@ jobs:
           # Use ditto to properly zip macOS apps (keeps resource forks and Finder metadata)
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" VKey.app.zip
         shell: bash
+        continue-on-error: false
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
+        continue-on-error: false
         with:
           name: VKey-app-bundle
           path: VKey.app.zip
